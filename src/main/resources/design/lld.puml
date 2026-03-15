@@ -1,0 +1,1396 @@
+@startuml SecondBrainLLD_v2
+title Second Brain — Low Level Design v2
+skinparam linetype ortho
+skinparam rankdir TB
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam classHeaderBackgroundColor #E6F1FB
+skinparam classBorderColor #185FA5
+skinparam arrowColor #185FA5
+skinparam noteBackgroundColor #FAEEDA
+skinparam noteBorderColor #BA7517
+skinparam packageBackgroundColor #F1EFE8
+skinparam packageBorderColor #888780
+skinparam defaultFontName Helvetica
+
+' ============================================================
+' ENTITIES
+' ============================================================
+package "entities" {
+
+  class User {
+    - id : UUID <<PK>>
+    - name : String
+    - email : String <<unique>>
+    - passwordHash : String
+    - googleId : String
+    - profilePictureUrl : String
+    - timezone : String
+    - createdAt : LocalDateTime
+    - updatedAt : LocalDateTime
+    --
+    + toDto() : UserDto
+  }
+
+  class Domain {
+    - id : UUID <<PK>>
+    - userId : UUID <<FK>>
+    - domainType : DomainType <<enum>>
+    - customName : String
+    - skillLevel : SkillLevel <<enum>>
+    - status : DomainStatus <<enum>>
+    - planDescription : String
+    - weeklySchedule : String
+    - linkedResourceUrl : String
+    - linkedResourceTitle : String
+    - currentStreak : Integer
+    - longestStreak : Integer
+    - lastLogDate : LocalDate
+    - createdAt : LocalDateTime
+    - updatedAt : LocalDateTime
+    --
+    + toDto() : DomainDto
+    + isStreakBroken() : boolean
+  }
+
+  class DomainMetricDefinition {
+    - id : UUID <<PK>>
+    - domainId : UUID <<FK>>
+    - metricKey : String
+    - label : String
+    - unit : String
+    - isTrackedPerSession : boolean
+    - isPR : boolean
+    - isHigherBetter : boolean
+    - displayOrder : Integer
+    --
+    + toDto() : MetricDefinitionDto
+  }
+
+  note right of DomainMetricDefinition
+    All domains use this same table.
+    GYM rows example:
+      bench_press_kg / kg / isPR=true / higherBetter=true
+      squat_kg       / kg / isPR=true / higherBetter=true
+      deadlift_kg    / kg / isPR=true / higherBetter=true
+      total_volume_kg/ kg / isPR=false
+    RUNNING rows example:
+      distance_km    / km  / isPR=true / higherBetter=true
+      pace_per_km    / min / isPR=true / higherBetter=false
+      elevation_m    / m   / isPR=false
+    GUITAR rows example:
+      practice_min   / min / isPR=false
+      songs_completed/ num / isPR=false
+    Zero domain-specific tables.
+  end note
+
+  class SessionLog {
+    - id : UUID <<PK>>
+    - userId : UUID <<FK>>
+    - domainId : UUID <<FK>>
+    - sessionType : String
+    - logDate : LocalDate
+    - durationMinutes : Integer
+    - feelScore : Integer
+    - feelLabel : FeelLabel <<enum>>
+    - notes : String
+    - linkedReferenceUrl : String
+    - aiInsight : String
+    - createdAt : LocalDateTime
+    --
+    + toDto() : SessionLogDto
+  }
+
+  note right of SessionLog
+    notes = free text for any detail
+    user wants — e.g. "4 sets bench:
+    60/65/67.5/70kg". Not queried.
+    aiInsight written async after save.
+    No exerciseData column.
+    No JSONB. No special gym handling.
+  end note
+
+  class SessionMetricValue {
+    - id : UUID <<PK>>
+    - sessionLogId : UUID <<FK>>
+    - metricKey : String
+    - numericValue : Double
+    - unit : String
+  }
+
+  note right of SessionMetricValue
+    One row per metric per session.
+    Same table for every domain.
+    GYM session rows:
+      bench_press_kg  → 70.0
+      bench_press_reps→ 8
+      squat_kg        → 90.0
+      squat_reps      → 5
+      total_volume_kg → 3240
+    RUNNING session rows:
+      distance_km     → 5.2
+      pace_per_km     → 6.32
+      elevation_m     → 120
+    Charts, PRs, weekly stats,
+    milestones all read this table.
+    Nothing else stores metric data.
+  end note
+
+  class PersonalRecord {
+    - id : UUID <<PK>>
+    - userId : UUID <<FK>>
+    - domainId : UUID <<FK>>
+    - sessionLogId : UUID <<FK>>
+    - metricKey : String
+    - value : Double
+    - unit : String
+    - achievedAt : LocalDate
+    - previousValue : Double
+    --
+    + toDto() : PersonalRecordDto
+  }
+
+  note right of PersonalRecord
+    One row per PR-trackable metric
+    per domain. Upserted on each save.
+    previousValue stored for delta
+    display on celebration screen.
+    Works identically for bench_press_kg,
+    distance_km, pace_per_km — no
+    exercise-specific fields.
+  end note
+
+  class Milestone {
+    - id : UUID <<PK>>
+    - domainId : UUID <<FK>>
+    - label : String
+    - metricKey : String
+    - targetValue : Double
+    - currentValue : Double
+    - unit : String
+    - status : MilestoneStatus <<enum>>
+    - deadline : LocalDate
+    - completedAt : LocalDate
+    - aiGenerated : boolean
+    - createdAt : LocalDateTime
+    --
+    + progressPercent() : Double
+    + toDto() : MilestoneDto
+  }
+
+  class Task {
+    - id : UUID <<PK>>
+    - userId : UUID <<FK>>
+    - domainId : UUID <<FK>>
+    - title : String
+    - description : String
+    - status : TaskStatus <<enum>>
+    - dueDate : LocalDate
+    - completedAt : LocalDateTime
+    - progress : Integer
+    - aiGenerated : boolean
+    - createdAt : LocalDateTime
+    --
+    + toDto() : TaskDto
+  }
+
+  class AiNudge {
+    - id : UUID <<PK>>
+    - userId : UUID <<FK>>
+    - domainId : UUID <<FK>>
+    - message : String
+    - nudgeType : NudgeType <<enum>>
+    - isRead : boolean
+    - generatedAt : LocalDateTime
+    - readAt : LocalDateTime
+    --
+    + toDto() : AiNudgeDto
+  }
+
+  note right of AiNudge
+    Generated nightly by cron.
+    One per domain per user per day max.
+    Shown as a card on dashboard.
+    MISSING_LOG: "Haven't logged gym
+      in 3 days"
+    STREAK_AT_RISK: "Log today or your
+      12-day streak breaks tomorrow"
+    PR_OPPORTUNITY: "You're 2.5kg away
+      from a new bench PR"
+    MILESTONE_CLOSE: "2km from your 5k
+      distance milestone"
+  end note
+
+  class AiConversation {
+    - id : UUID <<PK>>
+    - userId : UUID <<FK>>
+    - preview : String
+    - createdAt : LocalDateTime
+    - updatedAt : LocalDateTime
+  }
+
+  class AiMessage {
+    - id : UUID <<PK>>
+    - conversationId : UUID <<FK>>
+    - role : MessageRole <<enum>>
+    - content : String
+    - createdAt : LocalDateTime
+  }
+
+  class NotificationPreference {
+    - id : UUID <<PK>>
+    - userId : UUID <<FK>> <<unique>>
+    - dailyReminderEnabled : boolean
+    - dailyReminderTime : LocalTime
+    - weeklyReviewEnabled : boolean
+    - weeklyReviewDayOfWeek : Integer
+    - streakAlertsEnabled : boolean
+    - prCelebrationEnabled : boolean
+    - updatedAt : LocalDateTime
+  }
+
+  class RefreshToken {
+    - id : UUID <<PK>>
+    - userId : UUID <<FK>>
+    - token : String <<unique>>
+    - expiresAt : LocalDateTime
+    - revokedAt : LocalDateTime
+    --
+    + isValid() : boolean
+  }
+}
+
+' ============================================================
+' ENUMS
+' ============================================================
+package "enums" {
+  enum DomainType {
+    GYM
+    RUNNING
+    READING
+    GUITAR
+    CHESS
+    LANGUAGE
+    NUTRITION
+    SLEEP
+    SWIMMING
+    MEDITATION
+    CUSTOM
+  }
+  enum SkillLevel {
+    BEGINNER
+    INTERMEDIATE
+    ADVANCED
+  }
+  enum DomainStatus {
+    ACTIVE
+    PAUSED
+    NEEDS_LOG
+    COMPLETED_MILESTONE
+    ARCHIVED
+  }
+  enum FeelLabel {
+    STRONG
+    OKAY
+    TIRED
+    ROUGH
+  }
+  enum MilestoneStatus {
+    UPCOMING
+    IN_PROGRESS
+    DONE
+    MISSED
+  }
+  enum TaskStatus {
+    TODO
+    IN_PROGRESS
+    DONE
+    SKIPPED
+  }
+  enum NudgeType {
+    MISSING_LOG
+    STREAK_AT_RISK
+    PR_OPPORTUNITY
+    REST_RECOMMENDED
+    PLAN_ADJUST
+    MILESTONE_CLOSE
+    WEEKLY_SUMMARY
+  }
+  enum MessageRole {
+    USER
+    ASSISTANT
+    SYSTEM
+  }
+}
+
+' ============================================================
+' DTO REQUEST
+' ============================================================
+package "dto_request" {
+  class RegisterRequest {
+    + name : String <<NotBlank>>
+    + email : String <<Email>>
+    + password : String <<Size(min=8)>>
+  }
+  class LoginRequest {
+    + email : String <<Email>>
+    + password : String <<NotBlank>>
+  }
+  class GoogleAuthRequest {
+    + googleToken : String <<NotBlank>>
+  }
+  class RefreshTokenRequest {
+    + refreshToken : String <<NotBlank>>
+  }
+  class CreateDomainRequest {
+    + domainType : DomainType <<NotNull>>
+    + customName : String
+    + skillLevel : SkillLevel <<NotNull>>
+    + linkedResourceUrl : String
+  }
+  class UpdateDomainRequest {
+    + customName : String
+    + skillLevel : SkillLevel
+    + planDescription : String
+    + weeklySchedule : String
+    + linkedResourceUrl : String
+    + status : DomainStatus
+  }
+  class CreateSessionLogRequest {
+    + domainId : UUID <<NotNull>>
+    + sessionType : String
+    + logDate : LocalDate <<NotNull>>
+    + durationMinutes : Integer
+    + feelScore : Integer
+    + feelLabel : FeelLabel
+    + notes : String
+    + linkedReferenceUrl : String
+    + metrics : Map<String, Double> <<NotEmpty>>
+  }
+  note right of CreateSessionLogRequest
+    metrics is a flat map.
+    Keys must match DomainMetricDefinition
+    metricKey values for this domain.
+    Backend validates before save.
+    GYM: {"bench_press_kg":70,
+          "bench_press_reps":8,
+          "squat_kg":90,"squat_reps":5}
+    RUN: {"distance_km":5.2,
+          "pace_per_km":6.32}
+  end note
+  class CreateTaskRequest {
+    + domainId : UUID
+    + title : String <<NotBlank>>
+    + description : String
+    + dueDate : LocalDate
+  }
+  class UpdateTaskStatusRequest {
+    + status : TaskStatus <<NotNull>>
+    + progress : Integer
+  }
+  class CreateMilestoneRequest {
+    + domainId : UUID <<NotNull>>
+    + label : String <<NotBlank>>
+    + metricKey : String <<NotBlank>>
+    + targetValue : Double <<NotNull>>
+    + unit : String
+    + deadline : LocalDate
+  }
+  class AiChatRequest {
+    + message : String <<NotBlank>>
+    + conversationId : UUID
+  }
+  class ApplyAiActionRequest {
+    + actionType : String <<NotBlank>>
+    + payload : Map<String, Object>
+  }
+  class UpdateProfileRequest {
+    + name : String
+    + timezone : String
+  }
+  class UpdateNotificationPrefRequest {
+    + dailyReminderEnabled : Boolean
+    + dailyReminderTime : LocalTime
+    + weeklyReviewEnabled : Boolean
+    + weeklyReviewDayOfWeek : Integer
+    + streakAlertsEnabled : Boolean
+    + prCelebrationEnabled : Boolean
+  }
+}
+
+' ============================================================
+' DTO RESPONSE
+' ============================================================
+package "dto_response" {
+  class AuthResponse {
+    + accessToken : String
+    + refreshToken : String
+    + user : UserDto
+  }
+  class UserDto {
+    + id : UUID
+    + name : String
+    + email : String
+    + profilePictureUrl : String
+    + timezone : String
+  }
+  class DomainDto {
+    + id : UUID
+    + domainType : DomainType
+    + customName : String
+    + skillLevel : SkillLevel
+    + status : DomainStatus
+    + planDescription : String
+    + weeklySchedule : String
+    + linkedResourceUrl : String
+    + linkedResourceTitle : String
+    + currentStreak : Integer
+    + longestStreak : Integer
+    + lastLogDate : LocalDate
+    + metrics : List<MetricDefinitionDto>
+    + nextMilestone : MilestoneDto
+  }
+  class MetricDefinitionDto {
+    + metricKey : String
+    + label : String
+    + unit : String
+    + isTrackedPerSession : boolean
+    + isPR : boolean
+    + isHigherBetter : boolean
+    + displayOrder : Integer
+  }
+  class SessionLogDto {
+    + id : UUID
+    + domainId : UUID
+    + sessionType : String
+    + logDate : LocalDate
+    + durationMinutes : Integer
+    + feelScore : Integer
+    + feelLabel : FeelLabel
+    + notes : String
+    + linkedReferenceUrl : String
+    + metrics : Map<String, Double>
+    + aiInsight : String
+    + newPrs : List<PersonalRecordDto>
+  }
+  note right of SessionLogDto
+    metrics hydrated from
+    SessionMetricValue rows on read.
+    newPrs only populated on POST
+    response. Empty on GET.
+  end note
+  class PersonalRecordDto {
+    + metricKey : String
+    + label : String
+    + value : Double
+    + unit : String
+    + achievedAt : LocalDate
+    + previousValue : Double
+    + delta : Double
+  }
+  class MilestoneDto {
+    + id : UUID
+    + label : String
+    + metricKey : String
+    + targetValue : Double
+    + currentValue : Double
+    + unit : String
+    + progressPercent : Double
+    + status : MilestoneStatus
+    + deadline : LocalDate
+    + completedAt : LocalDate
+  }
+  class TaskDto {
+    + id : UUID
+    + domainId : UUID
+    + title : String
+    + description : String
+    + status : TaskStatus
+    + dueDate : LocalDate
+    + progress : Integer
+    + aiGenerated : boolean
+  }
+  class DashboardResponse {
+    + greeting : String
+    + date : LocalDate
+    + todayFocus : List<TaskDto>
+    + streaks : Map<UUID, StreakDto>
+    + weeklyStats : List<WeeklyStatDto>
+    + aiNudge : AiNudgeDto
+    + upcomingTasks : List<TaskDto>
+  }
+  class StreakDto {
+    + domainId : UUID
+    + domainName : String
+    + currentStreak : Integer
+    + longestStreak : Integer
+    + lastLogDate : LocalDate
+  }
+  class WeeklyStatDto {
+    + domainId : UUID
+    + domainName : String
+    + metricKey : String
+    + label : String
+    + value : Double
+    + target : Double
+    + unit : String
+  }
+  class AiNudgeDto {
+    + id : UUID
+    + message : String
+    + nudgeType : NudgeType
+    + domainId : UUID
+    + domainName : String
+  }
+  class AiChatResponse {
+    + reply : String
+    + conversationId : UUID
+    + proposedActions : List<AiActionDto>
+  }
+  class AiActionDto {
+    + type : String
+    + description : String
+    + payload : Map<String, Object>
+  }
+  note right of AiActionDto
+    type values:
+      ADJUST_PLAN
+      ADD_TASK
+      SET_MILESTONE
+      LINK_RESOURCE
+      UPDATE_SCHEDULE
+    User confirms before applying.
+  end note
+  class AiConversationDto {
+    + id : UUID
+    + preview : String
+    + updatedAt : LocalDateTime
+  }
+  class AiMessageDto {
+    + id : UUID
+    + role : MessageRole
+    + content : String
+    + createdAt : LocalDateTime
+  }
+  class ProgressResponse {
+    + domainId : UUID
+    + metricKey : String
+    + timeSeries : List<TimeSeriesPointDto>
+    + milestones : List<MilestoneDto>
+    + prs : List<PersonalRecordDto>
+  }
+  class TimeSeriesPointDto {
+    + date : LocalDate
+    + value : Double
+  }
+  class GeneratedSystemDto {
+    + planDescription : String
+    + weeklySchedule : String
+    + metrics : List<MetricDefinitionDto>
+    + milestones : List<MilestoneDto>
+    + linkedResourceUrl : String
+    + linkedResourceTitle : String
+    + tasks : List<TaskDto>
+  }
+  class ApiError {
+    + status : Integer
+    + message : String
+    + errors : Map<String, String>
+    + timestamp : LocalDateTime
+  }
+}
+
+' ============================================================
+' REPOSITORIES
+' ============================================================
+package "repositories" {
+  interface UserRepository {
+    + findByEmail(email: String) : Optional<User>
+    + findByGoogleId(googleId: String) : Optional<User>
+    + existsByEmail(email: String) : boolean
+    + findAllIds() : List<UUID>
+  }
+  interface DomainRepository {
+    + findByUserId(userId: UUID) : List<Domain>
+    + findByUserIdAndDomainType(userId: UUID, type: DomainType) : Optional<Domain>
+    + findByUserIdAndStatus(userId: UUID, status: DomainStatus) : List<Domain>
+    + existsByUserIdAndDomainType(userId: UUID, type: DomainType) : boolean
+    + findAllActiveForStreakCheck(today: LocalDate) : List<Domain>
+  }
+  interface DomainMetricDefinitionRepository {
+    + findByDomainIdOrderByDisplayOrder(domainId: UUID) : List<DomainMetricDefinition>
+    + findByDomainIdAndMetricKey(domainId: UUID, key: String) : Optional<DomainMetricDefinition>
+    + findPrMetricsByDomainId(domainId: UUID) : List<DomainMetricDefinition>
+    + deleteByDomainId(domainId: UUID) : void
+  }
+  interface SessionLogRepository {
+    + findByUserIdOrderByLogDateDesc(userId: UUID, pageable: Pageable) : Page<SessionLog>
+    + findByDomainIdOrderByLogDateDesc(domainId: UUID, pageable: Pageable) : Page<SessionLog>
+    + findByDomainIdAndLogDateBetween(domainId: UUID, from: LocalDate, to: LocalDate) : List<SessionLog>
+    + findTopNByDomainIdOrderByLogDateDesc(domainId: UUID, pageable: Pageable) : List<SessionLog>
+    + findLogDatesByDomainId(domainId: UUID) : List<LocalDate>
+    + countByDomainIdAndLogDateBetween(domainId: UUID, from: LocalDate, to: LocalDate) : Long
+  }
+  interface SessionMetricValueRepository {
+    + findBySessionLogId(sessionLogId: UUID) : List<SessionMetricValue>
+    + findBySessionLogIdIn(logIds: List<UUID>) : List<SessionMetricValue>
+    + findMetricTimeSeries(domainId: UUID, metricKey: String, from: LocalDate, to: LocalDate) : List<TimeSeriesProjection>
+    + findMaxValueForMetric(domainId: UUID, metricKey: String) : Optional<Double>
+    + sumMetricForPeriod(domainId: UUID, metricKey: String, from: LocalDate, to: LocalDate) : Optional<Double>
+  }
+  note right of SessionMetricValueRepository
+    findMetricTimeSeries JPQL:
+    SELECT sl.logDate, smv.numericValue
+    FROM SessionMetricValue smv
+    JOIN smv.sessionLog sl
+    WHERE sl.domain.id = :domainId
+    AND smv.metricKey = :metricKey
+    AND sl.logDate BETWEEN :from AND :to
+    ORDER BY sl.logDate ASC
+  end note
+  interface PersonalRecordRepository {
+    + findByDomainId(domainId: UUID) : List<PersonalRecord>
+    + findByDomainIdAndMetricKey(domainId: UUID, metricKey: String) : Optional<PersonalRecord>
+    + findByUserId(userId: UUID) : List<PersonalRecord>
+    + findByUserIdOrderByAchievedAtDesc(userId: UUID, pageable: Pageable) : Page<PersonalRecord>
+  }
+  interface MilestoneRepository {
+    + findByDomainId(domainId: UUID) : List<Milestone>
+    + findByDomainIdAndStatus(domainId: UUID, status: MilestoneStatus) : List<Milestone>
+    + findFirstByDomainIdAndStatusOrderByDeadlineAsc(domainId: UUID, status: MilestoneStatus) : Optional<Milestone>
+    + findByDomainIdAndMetricKey(domainId: UUID, metricKey: String) : List<Milestone>
+  }
+  interface TaskRepository {
+    + findByUserIdAndStatusIn(userId: UUID, statuses: List<TaskStatus>) : List<Task>
+    + findByUserIdAndDueDateAndStatusIn(userId: UUID, date: LocalDate, statuses: List<TaskStatus>) : List<Task>
+    + findByDomainId(domainId: UUID) : List<Task>
+    + countByUserIdAndStatusAndDueDateBetween(userId: UUID, status: TaskStatus, from: LocalDate, to: LocalDate) : Long
+  }
+  interface AiNudgeRepository {
+    + findFirstByUserIdAndIsReadFalseOrderByGeneratedAtDesc(userId: UUID) : Optional<AiNudge>
+    + findByUserIdAndIsReadFalse(userId: UUID) : List<AiNudge>
+    + existsByUserIdAndDomainIdAndGeneratedAtAfter(userId: UUID, domainId: UUID, since: LocalDateTime) : boolean
+  }
+  interface AiConversationRepository {
+    + findByUserIdOrderByUpdatedAtDesc(userId: UUID) : List<AiConversation>
+    + findByIdAndUserId(id: UUID, userId: UUID) : Optional<AiConversation>
+  }
+  interface AiMessageRepository {
+    + findByConversationIdOrderByCreatedAtAsc(conversationId: UUID) : List<AiMessage>
+    + findTop20ByConversationIdOrderByCreatedAtDesc(conversationId: UUID) : List<AiMessage>
+  }
+  interface NotificationPreferenceRepository {
+    + findByUserId(userId: UUID) : Optional<NotificationPreference>
+    + findAllByDailyReminderEnabledTrue() : List<NotificationPreference>
+    + findAllByWeeklyReviewEnabledTrueAndWeeklyReviewDayOfWeek(dow: Integer) : List<NotificationPreference>
+  }
+  interface RefreshTokenRepository {
+    + findByToken(token: String) : Optional<RefreshToken>
+    + deleteByUserId(userId: UUID) : void
+    + deleteByExpiresAtBefore(cutoff: LocalDateTime) : void
+  }
+}
+
+' ============================================================
+' SERVICES
+' ============================================================
+package "services" {
+  class AuthService {
+    - userRepository : UserRepository
+    - refreshTokenRepository : RefreshTokenRepository
+    - notificationPreferenceRepository : NotificationPreferenceRepository
+    - jwtUtil : JwtUtil
+    - passwordEncoder : PasswordEncoder
+    - googleTokenVerifier : GoogleTokenVerifier
+    --
+    + register(request: RegisterRequest) : AuthResponse
+    + login(request: LoginRequest) : AuthResponse
+    + googleAuth(request: GoogleAuthRequest) : AuthResponse
+    + refreshAccessToken(request: RefreshTokenRequest) : AuthResponse
+    + logout(userId: UUID) : void
+    - createRefreshToken(user: User) : RefreshToken
+    - bootstrapUserDefaults(user: User) : void
+    - buildAuthResponse(user: User) : AuthResponse
+  }
+  class DomainService {
+    - domainRepository : DomainRepository
+    - metricDefinitionRepository : DomainMetricDefinitionRepository
+    - milestoneRepository : MilestoneRepository
+    - taskRepository : TaskRepository
+    - aiSystemGeneratorService : AiSystemGeneratorService
+    --
+    + getDomainsForUser(userId: UUID) : List<DomainDto>
+    + getDomainById(domainId: UUID, userId: UUID) : DomainDto
+    + createDomain(userId: UUID, request: CreateDomainRequest) : DomainDto
+    + updateDomain(domainId: UUID, userId: UUID, request: UpdateDomainRequest) : DomainDto
+    + pauseDomain(domainId: UUID, userId: UUID) : void
+    + archiveDomain(domainId: UUID, userId: UUID) : void
+    + generateAndApplySystem(domainId: UUID, userId: UUID) : GeneratedSystemDto
+    + updateStreakForDomain(domain: Domain, logDate: LocalDate) : void
+    + validateMetricKeys(domainId: UUID, submittedKeys: Set<String>) : void
+    - applyGeneratedSystem(domain: Domain, generated: GeneratedSystemDto) : void
+    - assertOwnership(domainId: UUID, userId: UUID) : Domain
+  }
+  note right of DomainService
+    validateMetricKeys() called by
+    SessionLogService before every save.
+    Throws ValidationException if any
+    submitted key is not defined in
+    DomainMetricDefinition for domain.
+    Prevents garbage data at entry point.
+  end note
+  class SessionLogService {
+    - sessionLogRepository : SessionLogRepository
+    - sessionMetricValueRepository : SessionMetricValueRepository
+    - domainService : DomainService
+    - prService : PersonalRecordService
+    - milestoneService : MilestoneService
+    - aiInsightService : AiInsightService
+    --
+    + createLog(userId: UUID, request: CreateSessionLogRequest) : SessionLogDto
+    + getLogsForDomain(domainId: UUID, userId: UUID, pageable: Pageable) : Page<SessionLogDto>
+    + getLogsForUser(userId: UUID, pageable: Pageable) : Page<SessionLogDto>
+    + getLogById(logId: UUID, userId: UUID) : SessionLogDto
+    + deleteLog(logId: UUID, userId: UUID) : void
+    - persistMetricValues(log: SessionLog, metrics: Map<String, Double>) : void
+    - hydrateMetrics(logId: UUID) : Map<String, Double>
+    - buildDto(log: SessionLog, newPrs: List<PersonalRecordDto>) : SessionLogDto
+  }
+  note right of SessionLogService
+    createLog() @Transactional steps:
+    1. assertDomainOwnership
+    2. validateMetricKeys
+    3. save SessionLog
+    4. bulk insert SessionMetricValues
+    5. prService.checkAndUpdatePrs()
+    6. milestoneService.updateProgress()
+    7. domainService.updateStreak()
+    8. aiInsightService.generate() @Async
+    9. return dto with newPrs[]
+    Steps 1-7 atomic. Step 8 async.
+  end note
+  class PersonalRecordService {
+    - prRepository : PersonalRecordRepository
+    - metricDefinitionRepository : DomainMetricDefinitionRepository
+    --
+    + checkAndUpdatePrs(log: SessionLog, metrics: Map<String, Double>) : List<PersonalRecordDto>
+    + getPrsForDomain(domainId: UUID) : List<PersonalRecordDto>
+    + getPrsForUser(userId: UUID, pageable: Pageable) : Page<PersonalRecordDto>
+    - isBetter(newVal: Double, oldVal: Double, isHigherBetter: boolean) : boolean
+    - upsertPr(log: SessionLog, metricKey: String, newVal: Double, unit: String, prevVal: Double) : PersonalRecordDto
+  }
+  note right of PersonalRecordService
+    checkAndUpdatePrs():
+    1. fetch isPR=true metrics for domain
+    2. for each in session metrics map:
+       - load existing PR (may be null)
+       - compare via isBetter()
+       - if better: upsert PR row,
+         set previousValue = old value
+    3. return new PRs list
+    Identical logic for bench_press_kg,
+    distance_km, pace_per_km, anything.
+    No exercise-specific code paths.
+  end note
+  class MilestoneService {
+    - milestoneRepository : MilestoneRepository
+    - prRepository : PersonalRecordRepository
+    - sessionMetricValueRepository : SessionMetricValueRepository
+    --
+    + createMilestone(userId: UUID, request: CreateMilestoneRequest) : MilestoneDto
+    + getMilestonesForDomain(domainId: UUID) : List<MilestoneDto>
+    + updateProgress(domainId: UUID) : void
+    + getNextMilestone(domainId: UUID) : Optional<MilestoneDto>
+    - resolveCurrentValue(milestone: Milestone) : Double
+    - checkAndComplete(milestone: Milestone) : boolean
+  }
+  note right of MilestoneService
+    resolveCurrentValue():
+    if metricKey isPR=true
+      → read PersonalRecord.value
+    else
+      → read latest SessionMetricValue
+    Called after every log save.
+    Auto-marks DONE when target hit.
+  end note
+  class TaskService {
+    - taskRepository : TaskRepository
+    - domainRepository : DomainRepository
+    --
+    + createTask(userId: UUID, request: CreateTaskRequest) : TaskDto
+    + getTasksForUser(userId: UUID, statuses: List<TaskStatus>, domainId: UUID) : List<TaskDto>
+    + getTodayTasks(userId: UUID) : List<TaskDto>
+    + updateTaskStatus(taskId: UUID, userId: UUID, request: UpdateTaskStatusRequest) : TaskDto
+    + deleteTask(taskId: UUID, userId: UUID) : void
+    + bulkCreateFromAi(userId: UUID, tasks: List<TaskDto>) : List<TaskDto>
+  }
+  class DashboardService {
+    - domainRepository : DomainRepository
+    - taskService : TaskService
+    - weeklyStatService : WeeklyStatService
+    - aiNudgeRepository : AiNudgeRepository
+    - userRepository : UserRepository
+    --
+    + getDashboard(userId: UUID, date: LocalDate) : DashboardResponse
+    - buildGreeting(name: String, date: LocalDate) : String
+    - buildStreakMap(domains: List<Domain>) : Map<UUID, StreakDto>
+  }
+  class WeeklyStatService {
+    - sessionMetricValueRepository : SessionMetricValueRepository
+    - sessionLogRepository : SessionLogRepository
+    - domainRepository : DomainRepository
+    - metricDefinitionRepository : DomainMetricDefinitionRepository
+    --
+    + getWeeklyStats(userId: UUID, weekStart: LocalDate) : List<WeeklyStatDto>
+    + getWeeklyStatForDomain(domainId: UUID, weekStart: LocalDate) : WeeklyStatDto
+    - aggregateMetric(domainId: UUID, metricKey: String, from: LocalDate, to: LocalDate) : Double
+    - resolveTarget(domain: Domain, metricKey: String) : Double
+  }
+  class ProgressService {
+    - sessionMetricValueRepository : SessionMetricValueRepository
+    - milestoneService : MilestoneService
+    - prRepository : PersonalRecordRepository
+    --
+    + getProgress(domainId: UUID, userId: UUID, metricKey: String, from: LocalDate, to: LocalDate) : ProgressResponse
+    - buildTimeSeries(domainId: UUID, metricKey: String, from: LocalDate, to: LocalDate) : List<TimeSeriesPointDto>
+  }
+  class StreakService {
+    - domainRepository : DomainRepository
+    - sessionLogRepository : SessionLogRepository
+    --
+    + recalculateStreak(domain: Domain) : void
+    + getStreakAtRiskDomains(userId: UUID) : List<Domain>
+    - computeStreak(logDates: List<LocalDate>, schedule: String, today: LocalDate) : Integer
+  }
+  class NotificationService {
+    - notificationPrefRepository : NotificationPreferenceRepository
+    - firebasePushService : FirebasePushService
+    --
+    + getPreferences(userId: UUID) : NotificationPreference
+    + updatePreferences(userId: UUID, request: UpdateNotificationPrefRequest) : void
+    + sendDailyReminder(userId: UUID) : void
+    + sendStreakAlert(userId: UUID, domainName: String, streak: Integer) : void
+    + sendPrCelebration(userId: UUID, pr: PersonalRecordDto) : void
+    + sendWeeklyReview(userId: UUID) : void
+  }
+  class ExportService {
+    - sessionLogRepository : SessionLogRepository
+    - sessionMetricValueRepository : SessionMetricValueRepository
+    - prRepository : PersonalRecordRepository
+    - milestoneRepository : MilestoneRepository
+    - domainRepository : DomainRepository
+    --
+    + exportAsJson(userId: UUID) : String
+    + exportAsCsv(userId: UUID) : byte[]
+  }
+}
+
+' ============================================================
+' AI SERVICES
+' ============================================================
+package "service.ai" {
+  class AiSystemGeneratorService {
+    - geminiClient : GeminiClient
+    - promptBuilder : PromptBuilder
+    --
+    + generateSystem(domainType: DomainType, skillLevel: SkillLevel, linkedUrl: String) : GeneratedSystemDto
+    + regenerateSystem(domain: Domain) : GeneratedSystemDto
+    - parseResponse(raw: String) : GeneratedSystemDto
+  }
+  note right of AiSystemGeneratorService
+    Calls Gemini with JSON mode.
+    Returns GeneratedSystemDto shape.
+    Includes metric definitions with
+    metricKey/label/unit/isPR/isHigherBetter
+    so every new domain gets correct
+    tracking setup automatically.
+  end note
+  class AiInsightService {
+    - geminiClient : GeminiClient
+    - promptBuilder : PromptBuilder
+    - sessionLogRepository : SessionLogRepository
+    - prRepository : PersonalRecordRepository
+    --
+    + generateSessionInsight(log: SessionLog, newPrs: List<PersonalRecordDto>) : void
+    + generateWeeklyInsight(userId: UUID, domainId: UUID) : String
+  }
+  note right of AiInsightService
+    generateSessionInsight() @Async.
+    Fetches last 5 logs for context.
+    Writes to SessionLog.aiInsight.
+    User sees it on next GET /logs/{id}.
+  end note
+  class AiChatService {
+    - geminiClient : GeminiClient
+    - promptBuilder : PromptBuilder
+    - contextAssembler : UserContextAssembler
+    - aiConversationRepository : AiConversationRepository
+    - aiMessageRepository : AiMessageRepository
+    - taskService : TaskService
+    - milestoneService : MilestoneService
+    - domainService : DomainService
+    --
+    + chat(userId: UUID, request: AiChatRequest) : AiChatResponse
+    + getConversations(userId: UUID) : List<AiConversationDto>
+    + getMessages(conversationId: UUID, userId: UUID) : List<AiMessageDto>
+    + applyAction(userId: UUID, request: ApplyAiActionRequest) : void
+    - resolveOrCreateConversation(userId: UUID, conversationId: UUID) : AiConversation
+    - persistMessages(conv: AiConversation, userMsg: String, reply: String) : void
+    - parseProposedActions(reply: String) : List<AiActionDto>
+  }
+  class AiNudgeService {
+    - geminiClient : GeminiClient
+    - promptBuilder : PromptBuilder
+    - contextAssembler : UserContextAssembler
+    - aiNudgeRepository : AiNudgeRepository
+    - domainRepository : DomainRepository
+    - sessionLogRepository : SessionLogRepository
+    - streakService : StreakService
+    --
+    + generateNudgesForAllDomains(userId: UUID) : void
+    + getUnreadNudge(userId: UUID) : Optional<AiNudgeDto>
+    + markNudgeRead(nudgeId: UUID, userId: UUID) : void
+    - evaluateNudgeType(domain: Domain, recentLogs: List<SessionLog>) : Optional<NudgeType>
+    - alreadySentToday(userId: UUID, domainId: UUID) : boolean
+  }
+  class UserContextAssembler {
+    - sessionLogRepository : SessionLogRepository
+    - sessionMetricValueRepository : SessionMetricValueRepository
+    - prRepository : PersonalRecordRepository
+    - domainRepository : DomainRepository
+    - milestoneRepository : MilestoneRepository
+    - taskRepository : TaskRepository
+    --
+    + assemble(userId: UUID) : UserContext
+    + assembleForDomain(userId: UUID, domainId: UUID) : UserContext
+  }
+  note right of UserContextAssembler
+    assemble() fetches:
+    - all active domains + metric defs
+    - last 30 logs with hydrated metrics
+    - all PRs
+    - IN_PROGRESS milestones
+    - TODO + IN_PROGRESS tasks
+    - current week stats
+    Formats to ~2000 token prompt block.
+    Every AI service calls this first.
+  end note
+  class PromptBuilder {
+    --
+    + systemGenerator(type: DomainType, level: SkillLevel, url: String) : String
+    + sessionInsight(log: SessionLog, recentLogs: List<SessionLog>, prs: List<PersonalRecordDto>) : String
+    + nudge(domain: Domain, logs: List<SessionLog>, type: NudgeType) : String
+    + chat(context: UserContext) : String
+    + weeklyInsight(stats: List<WeeklyStatDto>, prs: List<PersonalRecordDto>) : String
+  }
+  class UserContext {
+    + userId : UUID
+    + userName : String
+    + domains : List<DomainDto>
+    + recentLogs : List<SessionLogDto>
+    + prs : List<PersonalRecordDto>
+    + milestones : List<MilestoneDto>
+    + pendingTasks : List<TaskDto>
+    + weeklyStats : List<WeeklyStatDto>
+    + streaks : Map<UUID, StreakDto>
+    --
+    + toPromptString() : String
+  }
+}
+
+' ============================================================
+' EXTERNAL
+' ============================================================
+package "external" {
+  class GeminiClient {
+    - apiKey : String
+    - baseUrl : String
+    - model : String
+    - restTemplate : RestTemplate
+    --
+    + complete(systemPrompt: String, messages: List<GeminiMessage>) : String
+    + completeWithJson(systemPrompt: String, messages: List<GeminiMessage>) : String
+    - buildRequest(systemPrompt: String, messages: List<GeminiMessage>) : Map
+    - parseText(response: ResponseEntity) : String
+    - retryOnRateLimit(supplier: Supplier<String>) : String
+  }
+  note right of GeminiClient
+    To swap AI provider: implement
+    same two methods with OpenAI or
+    Claude SDK. No other class changes.
+    retryOnRateLimit: 3 attempts,
+    exponential backoff on 429.
+  end note
+  class GeminiMessage {
+    + role : String
+    + parts : List<Map<String, String>>
+  }
+  class FirebasePushService {
+    - messaging : FirebaseMessaging
+    --
+    + send(userId: UUID, title: String, body: String, data: Map<String, String>) : void
+    - getDeviceTokens(userId: UUID) : List<String>
+  }
+  class GoogleTokenVerifier {
+    - clientId : String
+    --
+    + verify(token: String) : GoogleUserInfo
+  }
+  class GoogleUserInfo {
+    + sub : String
+    + email : String
+    + name : String
+    + picture : String
+  }
+}
+
+' ============================================================
+' CONTROLLERS
+' ============================================================
+package "controllers" {
+  class AuthController {
+    - authService : AuthService
+    --
+    + register(request: RegisterRequest) : ResponseEntity<AuthResponse>
+    + login(request: LoginRequest) : ResponseEntity<AuthResponse>
+    + googleAuth(request: GoogleAuthRequest) : ResponseEntity<AuthResponse>
+    + refresh(request: RefreshTokenRequest) : ResponseEntity<AuthResponse>
+    + logout() : ResponseEntity<Void>
+  }
+  class DomainController {
+    - domainService : DomainService
+    --
+    + getDomains() : ResponseEntity<List<DomainDto>>
+    + getDomain(domainId: UUID) : ResponseEntity<DomainDto>
+    + createDomain(request: CreateDomainRequest) : ResponseEntity<DomainDto>
+    + updateDomain(domainId: UUID, request: UpdateDomainRequest) : ResponseEntity<DomainDto>
+    + pauseDomain(domainId: UUID) : ResponseEntity<Void>
+    + archiveDomain(domainId: UUID) : ResponseEntity<Void>
+    + generateSystem(domainId: UUID) : ResponseEntity<GeneratedSystemDto>
+  }
+  class SessionLogController {
+    - sessionLogService : SessionLogService
+    --
+    + createLog(request: CreateSessionLogRequest) : ResponseEntity<SessionLogDto>
+    + getLogs(domainId: UUID, pageable: Pageable) : ResponseEntity<Page<SessionLogDto>>
+    + getLog(logId: UUID) : ResponseEntity<SessionLogDto>
+    + deleteLog(logId: UUID) : ResponseEntity<Void>
+  }
+  class DashboardController {
+    - dashboardService : DashboardService
+    --
+    + getDashboard() : ResponseEntity<DashboardResponse>
+    + getWeeklySnapshot(weekStart: LocalDate) : ResponseEntity<List<WeeklyStatDto>>
+  }
+  class ProgressController {
+    - progressService : ProgressService
+    - prService : PersonalRecordService
+    --
+    + getProgress(domainId: UUID, metricKey: String, from: LocalDate, to: LocalDate) : ResponseEntity<ProgressResponse>
+    + getPrs(domainId: UUID) : ResponseEntity<List<PersonalRecordDto>>
+  }
+  class TaskController {
+    - taskService : TaskService
+    --
+    + getTasks(status: TaskStatus, domainId: UUID) : ResponseEntity<List<TaskDto>>
+    + getTodayTasks() : ResponseEntity<List<TaskDto>>
+    + createTask(request: CreateTaskRequest) : ResponseEntity<TaskDto>
+    + updateTask(taskId: UUID, request: UpdateTaskStatusRequest) : ResponseEntity<TaskDto>
+    + deleteTask(taskId: UUID) : ResponseEntity<Void>
+  }
+  class MilestoneController {
+    - milestoneService : MilestoneService
+    --
+    + getMilestones(domainId: UUID) : ResponseEntity<List<MilestoneDto>>
+    + createMilestone(request: CreateMilestoneRequest) : ResponseEntity<MilestoneDto>
+    + updateStatus(milestoneId: UUID, status: MilestoneStatus) : ResponseEntity<MilestoneDto>
+  }
+  class AiController {
+    - aiChatService : AiChatService
+    - aiNudgeService : AiNudgeService
+    --
+    + chat(request: AiChatRequest) : ResponseEntity<AiChatResponse>
+    + getConversations() : ResponseEntity<List<AiConversationDto>>
+    + getMessages(conversationId: UUID) : ResponseEntity<List<AiMessageDto>>
+    + applyAction(request: ApplyAiActionRequest) : ResponseEntity<Void>
+    + getNudge() : ResponseEntity<AiNudgeDto>
+    + markNudgeRead(nudgeId: UUID) : ResponseEntity<Void>
+  }
+  class UserController {
+    - authService : AuthService
+    - notificationService : NotificationService
+    - exportService : ExportService
+    --
+    + getProfile() : ResponseEntity<UserDto>
+    + updateProfile(request: UpdateProfileRequest) : ResponseEntity<UserDto>
+    + getNotificationPrefs() : ResponseEntity<NotificationPreference>
+    + updateNotificationPrefs(request: UpdateNotificationPrefRequest) : ResponseEntity<Void>
+    + exportData(format: String) : ResponseEntity<byte[]>
+  }
+  note right of AuthController
+    All controllers resolve userId
+    via @CurrentUser from SecurityContext.
+    Never in request body or path.
+  end note
+}
+
+' ============================================================
+' SECURITY
+' ============================================================
+package "security" {
+  class JwtUtil {
+    - secretKey : String
+    - accessTokenExpiryMs : Long
+    --
+    + generateAccessToken(user: User) : String
+    + generateRefreshTokenValue() : String
+    + extractUserId(token: String) : UUID
+    + validateToken(token: String) : boolean
+  }
+  class JwtAuthFilter {
+    - jwtUtil : JwtUtil
+    - userRepository : UserRepository
+    --
+    + doFilterInternal(req, res, chain) : void
+    - extractBearerToken(request: HttpServletRequest) : Optional<String>
+  }
+  class SecurityConfig {
+    - jwtAuthFilter : JwtAuthFilter
+    --
+    + securityFilterChain(http: HttpSecurity) : SecurityFilterChain
+    + passwordEncoder() : PasswordEncoder
+    + corsConfigurationSource() : CorsConfigurationSource
+  }
+}
+
+' ============================================================
+' SCHEDULERS
+' ============================================================
+package "scheduler" {
+  class DailyNudgeScheduler {
+    - userRepository : UserRepository
+    - aiNudgeService : AiNudgeService
+    - notificationService : NotificationService
+    --
+    + runNightly() : void
+  }
+  class StreakCheckScheduler {
+    - domainRepository : DomainRepository
+    - streakService : StreakService
+    - notificationService : NotificationService
+    --
+    + runMidnight() : void
+  }
+  class WeeklyReviewScheduler {
+    - notificationPrefRepository : NotificationPreferenceRepository
+    - notificationService : NotificationService
+    - aiInsightService : AiInsightService
+    --
+    + runWeekly() : void
+  }
+  class TokenCleanupScheduler {
+    - refreshTokenRepository : RefreshTokenRepository
+    --
+    + cleanExpired() : void
+  }
+}
+
+' ============================================================
+' EXCEPTIONS
+' ============================================================
+package "exception" {
+  class GlobalExceptionHandler {
+    + handleNotFound(ex: ResourceNotFoundException) : ResponseEntity<ApiError>
+    + handleUnauthorized(ex: UnauthorizedException) : ResponseEntity<ApiError>
+    + handleForbidden(ex: ForbiddenException) : ResponseEntity<ApiError>
+    + handleConflict(ex: DomainAlreadyExistsException) : ResponseEntity<ApiError>
+    + handleValidation(ex: MethodArgumentNotValidException) : ResponseEntity<ApiError>
+    + handleCustomValidation(ex: ValidationException) : ResponseEntity<ApiError>
+    + handleAiError(ex: AiServiceException) : ResponseEntity<ApiError>
+    + handleGeneric(ex: Exception) : ResponseEntity<ApiError>
+  }
+  class ResourceNotFoundException {
+    + ResourceNotFoundException(resource: String, id: Object)
+  }
+  class UnauthorizedException {
+    + UnauthorizedException(message: String)
+  }
+  class ForbiddenException {
+    + ForbiddenException(message: String)
+  }
+  class ValidationException {
+    + ValidationException(message: String)
+  }
+  class DomainAlreadyExistsException {
+    + DomainAlreadyExistsException(type: DomainType)
+  }
+  class AiServiceException {
+    + AiServiceException(message: String, cause: Throwable)
+  }
+}
+
+' ============================================================
+' UTIL
+' ============================================================
+package "util" {
+  class DateUtil {
+    + getWeekStart(date: LocalDate) : LocalDate
+    + getWeekEnd(date: LocalDate) : LocalDate
+    + isScheduledDay(weeklySchedule: String, date: LocalDate) : boolean
+  }
+  class StreakCalculator {
+    + compute(logDates: List<LocalDate>, schedule: String, today: LocalDate) : Integer
+  }
+  class MetricValidator {
+    + validateKeys(submitted: Set<String>, defined: List<DomainMetricDefinition>) : void
+  }
+  class ContextWindowUtil {
+    + truncateToLimit(text: String, maxTokens: Integer) : String
+  }
+  class SecurityUtil {
+    + getCurrentUserId() : UUID
+    + assertOwnership(resourceUserId: UUID, currentUserId: UUID) : void
+  }
+}
+
+' ============================================================
+' ENTITY RELATIONSHIPS
+' ============================================================
+User "1" --> "many" Domain : owns
+User "1" --> "many" SessionLog : logs
+User "1" --> "many" Task : has
+User "1" --> "many" PersonalRecord : holds
+User "1" --> "many" AiNudge : receives
+User "1" --> "many" AiConversation : has
+User "1" --> "1" NotificationPreference : configures
+User "1" --> "many" RefreshToken : holds
+
+Domain "1" --> "many" DomainMetricDefinition : defines
+Domain "1" --> "many" SessionLog : contains
+Domain "1" --> "many" Milestone : tracks
+Domain "1" --> "many" PersonalRecord : records
+Domain "1" --> "many" Task : has
+
+SessionLog "1" --> "many" SessionMetricValue : captures
+AiConversation "1" --> "many" AiMessage : contains
+
+' ============================================================
+' SERVICE → REPOSITORY
+' ============================================================
+AuthService ..> UserRepository : uses
+AuthService ..> RefreshTokenRepository : uses
+AuthService ..> NotificationPreferenceRepository : uses
+AuthService ..> GoogleTokenVerifier : uses
+AuthService ..> JwtUtil : uses
+
+DomainService ..> DomainRepository : uses
+DomainService ..> DomainMetricDefinitionRepository : uses
+DomainService ..> MilestoneRepository : uses
+DomainService ..> TaskRepository : uses
+DomainService ..> AiSystemGeneratorService : uses
+
+SessionLogService ..> SessionLogRepository : uses
+SessionLogService ..> SessionMetricValueRepository : uses
+SessionLogService ..> DomainService : uses
+SessionLogService ..> PersonalRecordService : uses
+SessionLogService ..> MilestoneService : uses
+SessionLogService ..> AiInsightService : uses
+
+PersonalRecordService ..> PersonalRecordRepository : uses
+PersonalRecordService ..> DomainMetricDefinitionRepository : uses
+
+MilestoneService ..> MilestoneRepository : uses
+MilestoneService ..> PersonalRecordRepository : uses
+MilestoneService ..> SessionMetricValueRepository : uses
+
+DashboardService ..> DomainRepository : uses
+DashboardService ..> TaskService : uses
+DashboardService ..> WeeklyStatService : uses
+DashboardService ..> AiNudgeRepository : uses
+DashboardService ..> UserRepository : uses
+
+WeeklyStatService ..> SessionMetricValueRepository : uses
+WeeklyStatService ..> SessionLogRepository : uses
+WeeklyStatService ..> DomainRepository : uses
+WeeklyStatService ..> DomainMetricDefinitionRepository : uses
+
+ProgressService ..> SessionMetricValueRepository : uses
+ProgressService ..> MilestoneService : uses
+ProgressService ..> PersonalRecordRepository : uses
+
+StreakService ..> DomainRepository : uses
+StreakService ..> SessionLogRepository : uses
+
+NotificationService ..> NotificationPreferenceRepository : uses
+NotificationService ..> FirebasePushService : uses
+
+ExportService ..> SessionLogRepository : uses
+ExportService ..> SessionMetricValueRepository : uses
+ExportService ..> PersonalRecordRepository : uses
+ExportService ..> MilestoneRepository : uses
+ExportService ..> DomainRepository : uses
+
+AiSystemGeneratorService ..> GeminiClient : calls
+AiSystemGeneratorService ..> PromptBuilder : uses
+
+AiInsightService ..> GeminiClient : calls
+AiInsightService ..> PromptBuilder : uses
+AiInsightService ..> SessionLogRepository : uses
+AiInsightService ..> PersonalRecordRepository : uses
+
+AiChatService ..> GeminiClient : calls
+AiChatService ..> PromptBuilder : uses
+AiChatService ..> UserContextAssembler : uses
+AiChatService ..> AiConversationRepository : uses
+AiChatService ..> AiMessageRepository : uses
+AiChatService ..> TaskService : uses
+AiChatService ..> MilestoneService : uses
+AiChatService ..> DomainService : uses
+
+AiNudgeService ..> GeminiClient : calls
+AiNudgeService ..> PromptBuilder : uses
+AiNudgeService ..> UserContextAssembler : uses
+AiNudgeService ..> AiNudgeRepository : uses
+AiNudgeService ..> DomainRepository : uses
+AiNudgeService ..> SessionLogRepository : uses
+AiNudgeService ..> StreakService : uses
+
+UserContextAssembler ..> SessionLogRepository : uses
+UserContextAssembler ..> SessionMetricValueRepository : uses
+UserContextAssembler ..> PersonalRecordRepository : uses
+UserContextAssembler ..> DomainRepository : uses
+UserContextAssembler ..> MilestoneRepository : uses
+UserContextAssembler ..> TaskRepository : uses
+
+' ============================================================
+' CONTROLLER → SERVICE
+' ============================================================
+AuthController ..> AuthService : uses
+DomainController ..> DomainService : uses
+SessionLogController ..> SessionLogService : uses
+DashboardController ..> DashboardService : uses
+ProgressController ..> ProgressService : uses
+ProgressController ..> PersonalRecordService : uses
+TaskController ..> TaskService : uses
+MilestoneController ..> MilestoneService : uses
+AiController ..> AiChatService : uses
+AiController ..> AiNudgeService : uses
+UserController ..> AuthService : uses
+UserController ..> NotificationService : uses
+UserController ..> ExportService : uses
+
+' ============================================================
+' SCHEDULER → SERVICE
+' ============================================================
+DailyNudgeScheduler ..> UserRepository : uses
+DailyNudgeScheduler ..> AiNudgeService : triggers
+DailyNudgeScheduler ..> NotificationService : triggers
+StreakCheckScheduler ..> DomainRepository : uses
+StreakCheckScheduler ..> StreakService : triggers
+StreakCheckScheduler ..> NotificationService : triggers
+WeeklyReviewScheduler ..> NotificationPreferenceRepository : uses
+WeeklyReviewScheduler ..> NotificationService : triggers
+WeeklyReviewScheduler ..> AiInsightService : triggers
+TokenCleanupScheduler ..> RefreshTokenRepository : uses
+
+@enduml
