@@ -1,8 +1,6 @@
 package com.secondbrain.second_brain_server.controllers;
 
-import com.secondbrain.second_brain_server.dto.request.GoogleAuthRequest;
 import com.secondbrain.second_brain_server.dto.request.LoginRequest;
-import com.secondbrain.second_brain_server.dto.request.RefreshTokenRequest;
 import com.secondbrain.second_brain_server.dto.request.RegisterRequest;
 import com.secondbrain.second_brain_server.dto.response.AuthResponse;
 import com.secondbrain.second_brain_server.services.AuthService;
@@ -28,16 +26,6 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
-    }
-
-    @PostMapping("/google")
-    public ResponseEntity<AuthResponse> googleAuth(@RequestBody GoogleAuthRequest request) {
-        return ResponseEntity.ok(authService.googleAuth(request));
-    }
-
-    @PostMapping("/refresh")
-    public ResponseEntity<AuthResponse> refresh(@RequestBody RefreshTokenRequest request) {
-        return ResponseEntity.ok(authService.refreshAccessToken(request));
     }
 
     @PostMapping("/logout")

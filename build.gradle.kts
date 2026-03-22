@@ -34,7 +34,6 @@ dependencies {
 	runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.5")
 	runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.5")
 	implementation("com.google.firebase:firebase-admin:9.2.0") // Use the latest version
-	implementation("com.google.api-client:google-api-client:1.39.2") // Use the latest version
 	compileOnly("org.projectlombok:lombok")
 	developmentOnly("org.springframework.boot:spring-boot-devtools")
 	runtimeOnly("org.postgresql:postgresql")

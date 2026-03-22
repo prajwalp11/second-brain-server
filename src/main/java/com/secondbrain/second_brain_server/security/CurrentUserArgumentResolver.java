@@ -11,7 +11,7 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 import java.util.UUID;
 
 @Component
-public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolver {
+public class    CurrentUserArgumentResolver implements HandlerMethodArgumentResolver {
 
     @Override
     public boolean supportsParameter(MethodParameter parameter) {

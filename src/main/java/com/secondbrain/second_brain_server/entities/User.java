@@ -27,8 +27,6 @@ public class User {
 
     private String passwordHash;
 
-    private String googleId;
-
     private String profilePictureUrl;
 
     private String timezone;
@@ -55,9 +53,21 @@ public class User {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<AiConversation> aiConversations;
 
-    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAzy)
     private NotificationPreference notificationPreference;
 
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<RefreshToken> refreshTokens;
+    // Constructor for creating a User reference with just the ID
+    public User(UUID id) {
+        this.id = id;
+    }
+
+    public com.secondbrain.second_brain_server.dto.response.UserDto toDto() {
+        return com.secondbrain.second_brain_server.dto.response.UserDto.builder()
+                .id(this.id)
+                .name(this.name)
+                .email(this.email)
+                .profilePictureUrl(this.profilePictureUrl)
+                .timezone(this.timezone)
+                .build();
+    }
 }
