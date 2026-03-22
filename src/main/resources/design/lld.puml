@@ -1138,6 +1138,53 @@ package "controllers" {
 ' SECURITY
 ' ============================================================
 package "security" {
+  class UserDetailsServiceImpl {
+    - userRepository : UserRepository
+    --
+    + loadUserByUsername(userId: String) : UserDetails
+  }
+  note right of UserDetailsServiceImpl
+    Implements Spring Security's
+    UserDetailsService interface.
+    Called by JwtAuthFilter after
+    token is validated.
+    userId param is the UUID string
+    extracted from JWT claims.
+    Fetches User from DB, wraps in
+    UserPrincipal, returns to filter.
+    Without this class the security
+    filter chain cannot authenticate
+    requests — it is mandatory.
+  end note
+
+  class UserPrincipal {
+    - user : User
+    --
+    + UserPrincipal(user: User)
+    + getAuthorities() : Collection<GrantedAuthority>
+    + getPassword() : String
+    + getUsername() : String
+    + getUserId() : UUID
+    + getUser() : User
+    + isAccountNonExpired() : boolean
+    + isAccountNonLocked() : boolean
+    + isCredentialsNonExpired() : boolean
+    + isEnabled() : boolean
+  }
+  note right of UserPrincipal
+    Implements Spring Security's
+    UserDetails interface.
+    Wraps User entity for use inside
+    the security filter chain.
+    getUsername() returns email.
+    getUserId() returns UUID —
+    used by @CurrentUser resolver.
+    getAuthorities() returns empty
+    list for now (no roles yet).
+    Stored in SecurityContextHolder
+    after successful authentication.
+  end note
+
   class JwtUtil {
     - secretKey : String
     - accessTokenExpiryMs : Long
@@ -1147,20 +1194,68 @@ package "security" {
     + extractUserId(token: String) : UUID
     + validateToken(token: String) : boolean
   }
+
   class JwtAuthFilter {
     - jwtUtil : JwtUtil
-    - userRepository : UserRepository
+    - userDetailsService : UserDetailsServiceImpl
     --
     + doFilterInternal(req, res, chain) : void
     - extractBearerToken(request: HttpServletRequest) : Optional<String>
   }
+  note right of JwtAuthFilter
+    OncePerRequestFilter.
+    1. extractBearerToken from header
+    2. jwtUtil.validateToken()
+    3. jwtUtil.extractUserId() -> UUID
+    4. userDetailsService.loadUserByUsername(uuid)
+    5. build UsernamePasswordAuthenticationToken
+    6. set in SecurityContextHolder
+    7. chain.doFilter()
+    Uses UserDetailsServiceImpl not
+    UserRepository directly — filter
+    should not bypass the service layer.
+  end note
+
   class SecurityConfig {
     - jwtAuthFilter : JwtAuthFilter
+    - userDetailsService : UserDetailsServiceImpl
     --
     + securityFilterChain(http: HttpSecurity) : SecurityFilterChain
     + passwordEncoder() : PasswordEncoder
     + corsConfigurationSource() : CorsConfigurationSource
+    + authenticationProvider() : DaoAuthenticationProvider
+    + authenticationManager(config: AuthenticationConfiguration) : AuthenticationManager
   }
+  note right of SecurityConfig
+    authenticationProvider() wires
+    UserDetailsServiceImpl +
+    passwordEncoder together into
+    DaoAuthenticationProvider.
+    authenticationManager() exposes
+    AuthenticationManager bean —
+    needed by AuthService.login()
+    to authenticate email+password.
+    securityFilterChain permits:
+      /api/v1/auth/** (all public)
+    Requires JWT for everything else.
+  end note
+
+  class CurrentUserArgumentResolver {
+    - userDetailsService : UserDetailsServiceImpl
+    --
+    + supportsParameter(param: MethodParameter) : boolean
+    + resolveArgument(param, mavContainer, webRequest, binderFactory) : UUID
+  }
+  note right of CurrentUserArgumentResolver
+    Implements HandlerMethodArgumentResolver.
+    Reads UserPrincipal from SecurityContext.
+    Returns userId UUID whenever a
+    controller method param is annotated
+    with @CurrentUser.
+    Registered in WebMvcConfig.
+    This is what makes @CurrentUser UUID
+    userId work in every controller.
+  end note
 }
 
 ' ============================================================
@@ -1247,6 +1342,11 @@ package "util" {
   class ContextWindowUtil {
     + truncateToLimit(text: String, maxTokens: Integer) : String
   }
+  class WebMvcConfig {
+    - currentUserArgumentResolver : CurrentUserArgumentResolver
+    --
+    + addArgumentResolvers(resolvers: List<HandlerMethodArgumentResolver>) : void
+  }
   class SecurityUtil {
     + getCurrentUserId() : UUID
     + assertOwnership(resourceUserId: UUID, currentUserId: UUID) : void
@@ -1282,6 +1382,14 @@ AuthService ..> RefreshTokenRepository : uses
 AuthService ..> NotificationPreferenceRepository : uses
 AuthService ..> GoogleTokenVerifier : uses
 AuthService ..> JwtUtil : uses
+
+UserDetailsServiceImpl ..> UserRepository : uses
+UserPrincipal ..> User : wraps
+JwtAuthFilter ..> JwtUtil : uses
+JwtAuthFilter ..> UserDetailsServiceImpl : uses
+SecurityConfig ..> JwtAuthFilter : uses
+SecurityConfig ..> UserDetailsServiceImpl : uses
+CurrentUserArgumentResolver ..> UserDetailsServiceImpl : uses
 
 DomainService ..> DomainRepository : uses
 DomainService ..> DomainMetricDefinitionRepository : uses
