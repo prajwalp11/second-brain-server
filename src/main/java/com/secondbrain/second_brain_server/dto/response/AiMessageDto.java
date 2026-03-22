@@ -1,5 +1,6 @@
 package com.secondbrain.second_brain_server.dto.response;
 
+import com.secondbrain.second_brain_server.entities.AiMessage;
 import com.secondbrain.second_brain_server.enums.MessageRole;
 import lombok.*;
 
@@ -17,4 +18,11 @@ public class AiMessageDto {
     private MessageRole role;
     private String content;
     private LocalDateTime createdAt;
+
+    public AiMessageDto(AiMessage message) {
+        this.id = message.getId();
+        this.role = message.getRole();
+        this.content = message.getContent();
+        this.createdAt = message.getCreatedAt();
+    }
 }

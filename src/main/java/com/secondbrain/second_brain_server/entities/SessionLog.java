@@ -1,5 +1,6 @@
 package com.secondbrain.second_brain_server.entities;
 
+import com.secondbrain.second_brain_server.dto.response.SessionLogDto;
 import com.secondbrain.second_brain_server.enums.FeelLabel;
 import jakarta.persistence.*;
 import lombok.*;
@@ -53,4 +54,20 @@ public class SessionLog {
 
     @OneToMany(mappedBy = "sessionLog", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<SessionMetricValue> metricValues;
+
+    public SessionLogDto toDto() {
+        return SessionLogDto.builder()
+                .id(this.id)
+                .domainId(this.domain != null ? this.domain.getId() : null)
+                .sessionType(this.sessionType)
+                .logDate(this.logDate)
+                .durationMinutes(this.durationMinutes)
+                .feelScore(this.feelScore)
+                .feelLabel(this.feelLabel)
+                .notes(this.notes)
+                .linkedReferenceUrl(this.linkedReferenceUrl)
+                .aiInsight(this.aiInsight)
+                // Metrics and newPrs will be populated by service layer
+                .build();
+    }
 }

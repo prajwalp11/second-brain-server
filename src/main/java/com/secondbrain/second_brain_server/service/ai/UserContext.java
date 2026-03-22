@@ -1,11 +1,6 @@
 package com.secondbrain.second_brain_server.service.ai;
 
-import com.secondbrain.second_brain_server.dto.response.DomainDto;
-import com.secondbrain.second_brain_server.dto.response.MilestoneDto;
-import com.secondbrain.second_brain_server.dto.response.PersonalRecordDto;
-import com.secondbrain.second_brain_server.dto.response.SessionLogDto;
-import com.secondbrain.second_brain_server.dto.response.StreakDto;
-import com.secondbrain.second_brain_server.dto.response.TaskDto;
+import com.secondbrain.second_brain_server.dto.response.*;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;

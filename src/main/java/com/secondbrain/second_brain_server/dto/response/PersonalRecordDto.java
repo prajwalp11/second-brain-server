@@ -3,6 +3,7 @@ package com.secondbrain.second_brain_server.dto.response;
 import lombok.*;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -11,6 +12,7 @@ import java.time.LocalDate;
 @Builder
 public class PersonalRecordDto {
 
+    private UUID domainId;
     private String metricKey;
     private String label;
     private Double value;

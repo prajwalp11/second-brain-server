@@ -1,5 +1,6 @@
 package com.secondbrain.second_brain_server.entities;
 
+import com.secondbrain.second_brain_server.dto.response.PersonalRecordDto;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -40,4 +41,17 @@ public class PersonalRecord {
     private LocalDate achievedAt;
 
     private Double previousValue;
+
+    public PersonalRecordDto toDto() {
+        return PersonalRecordDto.builder()
+                .domainId(this.domain != null ? this.domain.getId() : null)
+                .metricKey(this.metricKey)
+                .label(null) // Populated by service layer
+                .value(this.value)
+                .unit(this.unit)
+                .achievedAt(this.achievedAt)
+                .previousValue(this.previousValue)
+                .delta(this.previousValue != null ? this.value - this.previousValue : 0.0)
+                .build();
+    }
 }

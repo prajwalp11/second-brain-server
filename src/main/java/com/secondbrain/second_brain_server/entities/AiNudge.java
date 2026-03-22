@@ -1,5 +1,6 @@
 package com.secondbrain.second_brain_server.entities;
 
+import com.secondbrain.second_brain_server.dto.response.AiNudgeDto;
 import com.secondbrain.second_brain_server.enums.NudgeType;
 import jakarta.persistence.*;
 import lombok.*;
@@ -39,4 +40,14 @@ public class AiNudge {
     private LocalDateTime generatedAt;
 
     private LocalDateTime readAt;
+
+    public AiNudgeDto toDto() {
+        return AiNudgeDto.builder()
+                .id(this.id)
+                .message(this.message)
+                .nudgeType(this.nudgeType)
+                .domainId(this.domain != null ? this.domain.getId() : null)
+                .domainName(this.domain != null ? (this.domain.getCustomName() != null ? this.domain.getCustomName() : this.domain.getDomainType().name()) : null)
+                .build();
+    }
 }

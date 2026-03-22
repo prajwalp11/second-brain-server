@@ -27,14 +27,12 @@ public class UserController {
 
     @GetMapping("/profile")
     public ResponseEntity<UserDto> getProfile(@CurrentUser UUID userId) {
-        // Placeholder: AuthService doesn't have getProfile, assuming it will be added or handled differently
-        return ResponseEntity.ok().build(); // Needs actual return from service
+        return ResponseEntity.ok(authService.getProfile(userId));
     }
 
     @PutMapping("/profile")
     public ResponseEntity<UserDto> updateProfile(@RequestBody UpdateProfileRequest request, @CurrentUser UUID userId) {
-        // Placeholder: AuthService doesn't have updateProfile, assuming it will be added or handled differently
-        return ResponseEntity.ok().build(); // Needs actual return from service
+        return ResponseEntity.ok(authService.updateProfile(userId, request));
     }
 
     @GetMapping("/notification-prefs")

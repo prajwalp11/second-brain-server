@@ -20,8 +20,8 @@ public class MilestoneController {
     private final MilestoneService milestoneService;
 
     @GetMapping("/{domainId}")
-    public ResponseEntity<List<MilestoneDto>> getMilestones(@PathVariable UUID domainId) {
-        return ResponseEntity.ok(milestoneService.getMilestonesForDomain(domainId));
+    public ResponseEntity<List<MilestoneDto>> getMilestones(@PathVariable UUID domainId, @CurrentUser UUID userId) {
+        return ResponseEntity.ok(milestoneService.getMilestonesForDomain(domainId, userId));
     }
 
     @PostMapping
@@ -30,8 +30,7 @@ public class MilestoneController {
     }
 
     @PutMapping("/{milestoneId}/status")
-    public ResponseEntity<MilestoneDto> updateStatus(@PathVariable UUID milestoneId, @RequestParam MilestoneStatus status) {
-        // Placeholder for update status logic
-        return ResponseEntity.ok().build(); // Needs actual return from service
+    public ResponseEntity<MilestoneDto> updateStatus(@PathVariable UUID milestoneId, @RequestParam MilestoneStatus status, @CurrentUser UUID userId) {
+        return ResponseEntity.ok(milestoneService.updateStatus(milestoneId, userId, status));
     }
 }

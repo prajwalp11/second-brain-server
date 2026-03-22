@@ -1,5 +1,6 @@
 package com.secondbrain.second_brain_server.entities;
 
+import com.secondbrain.second_brain_server.dto.response.MetricDefinitionDto;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -35,4 +36,16 @@ public class DomainMetricDefinition {
     private boolean isHigherBetter;
 
     private Integer displayOrder;
+
+    public MetricDefinitionDto toDto() {
+        return MetricDefinitionDto.builder()
+                .metricKey(this.metricKey)
+                .label(this.label)
+                .unit(this.unit)
+                .isTrackedPerSession(this.isTrackedPerSession)
+                .isPR(this.isPR)
+                .isHigherBetter(this.isHigherBetter)
+                .displayOrder(this.displayOrder)
+                .build();
+    }
 }
