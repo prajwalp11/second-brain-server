@@ -23,7 +23,7 @@ package "entities" {
     - name : String
     - email : String <<unique>>
     - passwordHash : String
-    - googleId : String
+    
     - profilePictureUrl : String
     - timezone : String
     - createdAt : LocalDateTime
@@ -239,15 +239,7 @@ package "entities" {
 
   
 
-  class RefreshToken {
-    - id : UUID <<PK>>
-    - userId : UUID <<FK>>
-    - token : String <<unique>>
-    - expiresAt : LocalDateTime
-    - revokedAt : LocalDateTime
-    --
-    + isValid() : boolean
-  }
+  
 }
 
 ' ============================================================
@@ -663,11 +655,7 @@ package "repositories" {
     + findTop20ByConversationIdOrderByCreatedAtDesc(conversationId: UUID) : List<AiMessage>
   }
   
-  interface RefreshTokenRepository {
-    + findByToken(token: String) : Optional<RefreshToken>
-    + deleteByUserId(userId: UUID) : void
-    + deleteByExpiresAtBefore(cutoff: LocalDateTime) : void
-  }
+  
 }
 
 ' ============================================================
@@ -676,7 +664,6 @@ package "repositories" {
 package "services" {
   class AuthService {
     - userRepository : UserRepository
-    - refreshTokenRepository : RefreshTokenRepository
     
     - jwtUtil : JwtUtil
     - passwordEncoder : PasswordEncoder
@@ -1246,7 +1233,6 @@ package "scheduler" {
     + runWeekly() : void
   }
   class TokenCleanupScheduler {
-    - refreshTokenRepository : RefreshTokenRepository
     --
     + cleanExpired() : void
   }
@@ -1325,7 +1311,7 @@ User "1" --> "many" PersonalRecord : holds
 User "1" --> "many" AiNudge : receives
 User "1" --> "many" AiConversation : has
 
-User "1" --> "many" RefreshToken : holds
+
 
 Domain "1" --> "many" DomainMetricDefinition : defines
 Domain "1" --> "many" SessionLog : contains
@@ -1340,7 +1326,7 @@ AiConversation "1" --> "many" AiMessage : contains
 ' SERVICE → REPOSITORY
 ' ============================================================
 AuthService ..> UserRepository : uses
-AuthService ..> RefreshTokenRepository : uses
+
 
 AuthService ..> GoogleTokenVerifier : uses
 AuthService ..> JwtUtil : uses
@@ -1461,6 +1447,6 @@ StreakCheckScheduler ..> StreakService : triggers
 
 
 WeeklyReviewScheduler ..> AiInsightService : triggers
-TokenCleanupScheduler ..> RefreshTokenRepository : uses
+
 
 @enduml
