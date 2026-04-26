@@ -237,17 +237,7 @@ package "entities" {
     - createdAt : LocalDateTime
   }
 
-  class NotificationPreference {
-    - id : UUID <<PK>>
-    - userId : UUID <<FK>> <<unique>>
-    - dailyReminderEnabled : boolean
-    - dailyReminderTime : LocalTime
-    - weeklyReviewEnabled : boolean
-    - weeklyReviewDayOfWeek : Integer
-    - streakAlertsEnabled : boolean
-    - prCelebrationEnabled : boolean
-    - updatedAt : LocalDateTime
-  }
+  
 
   class RefreshToken {
     - id : UUID <<PK>>
@@ -408,14 +398,7 @@ package "dto_request" {
     + name : String
     + timezone : String
   }
-  class UpdateNotificationPrefRequest {
-    + dailyReminderEnabled : Boolean
-    + dailyReminderTime : LocalTime
-    + weeklyReviewEnabled : Boolean
-    + weeklyReviewDayOfWeek : Integer
-    + streakAlertsEnabled : Boolean
-    + prCelebrationEnabled : Boolean
-  }
+  
 }
 
 ' ============================================================
@@ -679,11 +662,7 @@ package "repositories" {
     + findByConversationIdOrderByCreatedAtAsc(conversationId: UUID) : List<AiMessage>
     + findTop20ByConversationIdOrderByCreatedAtDesc(conversationId: UUID) : List<AiMessage>
   }
-  interface NotificationPreferenceRepository {
-    + findByUserId(userId: UUID) : Optional<NotificationPreference>
-    + findAllByDailyReminderEnabledTrue() : List<NotificationPreference>
-    + findAllByWeeklyReviewEnabledTrueAndWeeklyReviewDayOfWeek(dow: Integer) : List<NotificationPreference>
-  }
+  
   interface RefreshTokenRepository {
     + findByToken(token: String) : Optional<RefreshToken>
     + deleteByUserId(userId: UUID) : void
@@ -698,7 +677,7 @@ package "services" {
   class AuthService {
     - userRepository : UserRepository
     - refreshTokenRepository : RefreshTokenRepository
-    - notificationPreferenceRepository : NotificationPreferenceRepository
+    
     - jwtUtil : JwtUtil
     - passwordEncoder : PasswordEncoder
     - googleTokenVerifier : GoogleTokenVerifier
@@ -862,17 +841,7 @@ package "services" {
     + getStreakAtRiskDomains(userId: UUID) : List<Domain>
     - computeStreak(logDates: List<LocalDate>, schedule: String, today: LocalDate) : Integer
   }
-  class NotificationService {
-    - notificationPrefRepository : NotificationPreferenceRepository
-    - firebasePushService : FirebasePushService
-    --
-    + getPreferences(userId: UUID) : NotificationPreference
-    + updatePreferences(userId: UUID, request: UpdateNotificationPrefRequest) : void
-    + sendDailyReminder(userId: UUID) : void
-    + sendStreakAlert(userId: UUID, domainName: String, streak: Integer) : void
-    + sendPrCelebration(userId: UUID, pr: PersonalRecordDto) : void
-    + sendWeeklyReview(userId: UUID) : void
-  }
+  
   class ExportService {
     - sessionLogRepository : SessionLogRepository
     - sessionMetricValueRepository : SessionMetricValueRepository
@@ -1118,13 +1087,10 @@ package "controllers" {
   }
   class UserController {
     - authService : AuthService
-    - notificationService : NotificationService
     - exportService : ExportService
     --
     + getProfile() : ResponseEntity<UserDto>
     + updateProfile(request: UpdateProfileRequest) : ResponseEntity<UserDto>
-    + getNotificationPrefs() : ResponseEntity<NotificationPreference>
-    + updateNotificationPrefs(request: UpdateNotificationPrefRequest) : ResponseEntity<Void>
     + exportData(format: String) : ResponseEntity<byte[]>
   }
   note right of AuthController
@@ -1265,20 +1231,16 @@ package "scheduler" {
   class DailyNudgeScheduler {
     - userRepository : UserRepository
     - aiNudgeService : AiNudgeService
-    - notificationService : NotificationService
     --
     + runNightly() : void
   }
   class StreakCheckScheduler {
     - domainRepository : DomainRepository
     - streakService : StreakService
-    - notificationService : NotificationService
     --
     + runMidnight() : void
   }
   class WeeklyReviewScheduler {
-    - notificationPrefRepository : NotificationPreferenceRepository
-    - notificationService : NotificationService
     - aiInsightService : AiInsightService
     --
     + runWeekly() : void
@@ -1362,7 +1324,7 @@ User "1" --> "many" Task : has
 User "1" --> "many" PersonalRecord : holds
 User "1" --> "many" AiNudge : receives
 User "1" --> "many" AiConversation : has
-User "1" --> "1" NotificationPreference : configures
+
 User "1" --> "many" RefreshToken : holds
 
 Domain "1" --> "many" DomainMetricDefinition : defines
@@ -1379,7 +1341,7 @@ AiConversation "1" --> "many" AiMessage : contains
 ' ============================================================
 AuthService ..> UserRepository : uses
 AuthService ..> RefreshTokenRepository : uses
-AuthService ..> NotificationPreferenceRepository : uses
+
 AuthService ..> GoogleTokenVerifier : uses
 AuthService ..> JwtUtil : uses
 
@@ -1429,8 +1391,8 @@ ProgressService ..> PersonalRecordRepository : uses
 StreakService ..> DomainRepository : uses
 StreakService ..> SessionLogRepository : uses
 
-NotificationService ..> NotificationPreferenceRepository : uses
-NotificationService ..> FirebasePushService : uses
+
+
 
 ExportService ..> SessionLogRepository : uses
 ExportService ..> SessionMetricValueRepository : uses
@@ -1484,7 +1446,7 @@ MilestoneController ..> MilestoneService : uses
 AiController ..> AiChatService : uses
 AiController ..> AiNudgeService : uses
 UserController ..> AuthService : uses
-UserController ..> NotificationService : uses
+
 UserController ..> ExportService : uses
 
 ' ============================================================
@@ -1492,12 +1454,12 @@ UserController ..> ExportService : uses
 ' ============================================================
 DailyNudgeScheduler ..> UserRepository : uses
 DailyNudgeScheduler ..> AiNudgeService : triggers
-DailyNudgeScheduler ..> NotificationService : triggers
+
 StreakCheckScheduler ..> DomainRepository : uses
 StreakCheckScheduler ..> StreakService : triggers
-StreakCheckScheduler ..> NotificationService : triggers
-WeeklyReviewScheduler ..> NotificationPreferenceRepository : uses
-WeeklyReviewScheduler ..> NotificationService : triggers
+
+
+
 WeeklyReviewScheduler ..> AiInsightService : triggers
 TokenCleanupScheduler ..> RefreshTokenRepository : uses
 

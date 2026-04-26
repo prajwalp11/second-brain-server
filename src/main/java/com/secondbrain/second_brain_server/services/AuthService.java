@@ -5,12 +5,12 @@ import com.secondbrain.second_brain_server.dto.request.RegisterRequest;
 import com.secondbrain.second_brain_server.dto.request.UpdateProfileRequest;
 import com.secondbrain.second_brain_server.dto.response.AuthResponse;
 import com.secondbrain.second_brain_server.dto.response.UserDto;
-import com.secondbrain.second_brain_server.entities.NotificationPreference;
+
 import com.secondbrain.second_brain_server.entities.User;
 import com.secondbrain.second_brain_server.exception.ResourceNotFoundException;
 import com.secondbrain.second_brain_server.exception.UnauthorizedException;
 import com.secondbrain.second_brain_server.exception.ValidationException;
-import com.secondbrain.second_brain_server.repository.NotificationPreferenceRepository;
+
 import com.secondbrain.second_brain_server.repository.UserRepository;
 import com.secondbrain.second_brain_server.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +29,7 @@ import java.util.UUID;
 public class AuthService {
 
     private final UserRepository userRepository;
-    private final NotificationPreferenceRepository notificationPreferenceRepository;
+    
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
@@ -49,7 +49,7 @@ public class AuthService {
                 .build();
 
         User savedUser = userRepository.save(newUser);
-        bootstrapUserDefaults(savedUser);
+        
         return buildAuthResponse(savedUser);
     }
 
@@ -88,17 +88,7 @@ public class AuthService {
         // If token invalidation (blacklisting) is required, it would be implemented here.
     }
 
-    private void bootstrapUserDefaults(User user) {
-        NotificationPreference defaultPrefs = NotificationPreference.builder()
-                .user(user)
-                .dailyReminderEnabled(false)
-                .weeklyReviewEnabled(false)
-                .streakAlertsEnabled(true)
-                .prCelebrationEnabled(true)
-                .updatedAt(LocalDateTime.now())
-                .build();
-        notificationPreferenceRepository.save(defaultPrefs);
-    }
+    
 
     private AuthResponse buildAuthResponse(User user) {
         String accessToken = jwtUtil.generateAccessToken(user);

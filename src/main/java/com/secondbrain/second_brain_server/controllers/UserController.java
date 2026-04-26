@@ -1,13 +1,10 @@
 package com.secondbrain.second_brain_server.controllers;
 
-import com.secondbrain.second_brain_server.dto.request.UpdateNotificationPrefRequest;
 import com.secondbrain.second_brain_server.dto.request.UpdateProfileRequest;
 import com.secondbrain.second_brain_server.dto.response.UserDto;
-import com.secondbrain.second_brain_server.entities.NotificationPreference;
 import com.secondbrain.second_brain_server.security.CurrentUser;
 import com.secondbrain.second_brain_server.services.AuthService;
 import com.secondbrain.second_brain_server.services.ExportService;
-import com.secondbrain.second_brain_server.services.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -22,7 +19,6 @@ import java.util.UUID;
 public class UserController {
 
     private final AuthService authService; // Used for profile updates, though LLD shows it in UserService
-    private final NotificationService notificationService;
     private final ExportService exportService;
 
     @GetMapping("/profile")
@@ -33,17 +29,6 @@ public class UserController {
     @PutMapping("/profile")
     public ResponseEntity<UserDto> updateProfile(@RequestBody UpdateProfileRequest request, @CurrentUser UUID userId) {
         return ResponseEntity.ok(authService.updateProfile(userId, request));
-    }
-
-    @GetMapping("/notification-prefs")
-    public ResponseEntity<NotificationPreference> getNotificationPrefs(@CurrentUser UUID userId) {
-        return ResponseEntity.ok(notificationService.getPreferences(userId));
-    }
-
-    @PutMapping("/notification-prefs")
-    public ResponseEntity<Void> updateNotificationPrefs(@RequestBody UpdateNotificationPrefRequest request, @CurrentUser UUID userId) {
-        notificationService.updatePreferences(userId, request);
-        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/export")
