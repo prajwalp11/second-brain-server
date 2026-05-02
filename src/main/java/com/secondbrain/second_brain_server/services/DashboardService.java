@@ -38,7 +38,7 @@ public class DashboardService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", userId));
 
-        String greeting = buildGreeting(user.getName(), date);
+        String greeting = buildGreeting(user.getFirstName(), date);
         List<TaskDto> todayFocus = taskService.getTodayTasks(userId);
         List<Domain> domains = domainRepository.findByUserId(userId);
         Map<UUID, StreakDto> streaks = buildStreakMap(domains);

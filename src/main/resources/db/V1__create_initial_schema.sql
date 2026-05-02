@@ -71,14 +71,6 @@ CREATE TABLE milestones (
     FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
--- Create notification_preferences table
-CREATE TABLE notification_preferences (
-    id UUID PRIMARY KEY,
-    type VARCHAR(255) NOT NULL, -- Assuming ENUM will be mapped to VARCHAR
-    enabled BOOLEAN NOT NULL,
-    user_id UUID NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES users (id)
-);
 
 -- Create ai_conversations table
 CREATE TABLE ai_conversations (

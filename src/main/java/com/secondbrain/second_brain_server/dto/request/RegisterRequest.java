@@ -13,7 +13,10 @@ import lombok.*;
 public class RegisterRequest {
 
     @NotBlank
-    private String name;
+    private String firstName;
+
+    @NotBlank
+    private String lastName;
 
     @Email
     @NotBlank

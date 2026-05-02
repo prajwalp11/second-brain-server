@@ -63,7 +63,7 @@ public class UserContextAssembler {
                 .collect(Collectors.toList());
 
         List<PersonalRecordDto> prs = prRepository.findByUserId(userId).stream()
-                .map(pr -> pr.toDto()) // Assuming PersonalRecord has a toDto method
+                .map(pr -> pr.toDto()) // Assuming PersonalRecord has a toResponse method
                 .collect(Collectors.toList());
 
         List<MilestoneDto> milestones = milestoneRepository.findByDomainIdAndStatus(null, MilestoneStatus.IN_PROGRESS).stream() // Need to fetch for user's domains

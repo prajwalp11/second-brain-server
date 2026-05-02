@@ -81,7 +81,7 @@ public class AiNudgeService {
 
     public Optional<AiNudgeDto> getUnreadNudge(UUID userId) {
         return aiNudgeRepository.findFirstByUserIdAndIsReadFalseOrderByGeneratedAtDesc(userId)
-                .map(AiNudge::toDto); // Assuming AiNudge has a toDto method
+                .map(AiNudge::toDto); // Assuming AiNudge has a toResponse method
     }
 
     @Transactional

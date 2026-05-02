@@ -1,7 +1,6 @@
 package com.secondbrain.second_brain_server.controllers;
 
-import com.secondbrain.second_brain_server.dto.request.UpdateProfileRequest;
-import com.secondbrain.second_brain_server.dto.response.UserDto;
+import com.secondbrain.second_brain_server.dto.response.UserResponse;
 import com.secondbrain.second_brain_server.security.CurrentUser;
 import com.secondbrain.second_brain_server.services.AuthService;
 import com.secondbrain.second_brain_server.services.ExportService;
@@ -18,17 +17,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserController {
 
-    private final AuthService authService; // Used for profile updates, though LLD shows it in UserService
+    private final AuthService authService;
     private final ExportService exportService;
 
     @GetMapping("/profile")
-    public ResponseEntity<UserDto> getProfile(@CurrentUser UUID userId) {
+    public ResponseEntity<UserResponse> getProfile(@CurrentUser UUID userId) {
         return ResponseEntity.ok(authService.getProfile(userId));
-    }
-
-    @PutMapping("/profile")
-    public ResponseEntity<UserDto> updateProfile(@RequestBody UpdateProfileRequest request, @CurrentUser UUID userId) {
-        return ResponseEntity.ok(authService.updateProfile(userId, request));
     }
 
     @GetMapping("/export")

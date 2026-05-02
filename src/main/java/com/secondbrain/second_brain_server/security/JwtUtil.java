@@ -27,7 +27,7 @@ public class JwtUtil {
 
     public String generateAccessToken(User user) {
         return Jwts.builder()
-                .subject(user.getId().toString())
+                .subject(user.getEmail())
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + accessTokenExpiryMs))
                 .signWith(getSigningKey())
@@ -38,8 +38,8 @@ public class JwtUtil {
         return UUID.randomUUID().toString();
     }
 
-    public UUID extractUserId(String token) {
-        return UUID.fromString(extractClaim(token, Claims::getSubject));
+    public String extractEmail(String token) {
+        return extractClaim(token, Claims::getSubject);
     }
 
     public boolean validateToken(String token) {

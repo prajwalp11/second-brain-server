@@ -2,9 +2,8 @@ package com.secondbrain.second_brain_server.services;
 
 import com.secondbrain.second_brain_server.dto.request.LoginRequest;
 import com.secondbrain.second_brain_server.dto.request.RegisterRequest;
-import com.secondbrain.second_brain_server.dto.request.UpdateProfileRequest;
 import com.secondbrain.second_brain_server.dto.response.AuthResponse;
-import com.secondbrain.second_brain_server.dto.response.UserDto;
+import com.secondbrain.second_brain_server.dto.response.UserResponse;
 
 import com.secondbrain.second_brain_server.entities.User;
 import com.secondbrain.second_brain_server.exception.ResourceNotFoundException;
@@ -21,7 +20,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -35,22 +33,23 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
 
     @Transactional
-    public AuthResponse register(RegisterRequest request) {
+    public String register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new ValidationException("Email already registered.");
         }
 
         User newUser = User.builder()
-                .name(request.getName())
+                .firstName(request.getFirstName())
+                .lastName(request.getLastName())
                 .email(request.getEmail())
-                .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .password(passwordEncoder.encode(request.getPassword()))
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
 
         User savedUser = userRepository.save(newUser);
         
-        return buildAuthResponse(savedUser);
+        return "Registration successful for user: " + savedUser.getEmail();
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -64,23 +63,12 @@ public class AuthService {
         return buildAuthResponse(user);
     }
 
-    public UserDto getProfile(UUID userId) {
+    public UserResponse getProfile(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", userId));
-        return user.toDto();
+        return user.toResponse();
     }
 
-    @Transactional
-    public UserDto updateProfile(UUID userId, UpdateProfileRequest request) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
-
-        Optional.ofNullable(request.getName()).ifPresent(user::setName);
-        Optional.ofNullable(request.getTimezone()).ifPresent(user::setTimezone);
-        user.setUpdatedAt(LocalDateTime.now());
-
-        return userRepository.save(user).toDto();
-    }
 
     public void logout(UUID userId) {
         // For a stateless JWT system, server-side logout typically means doing nothing
@@ -92,16 +80,8 @@ public class AuthService {
 
     private AuthResponse buildAuthResponse(User user) {
         String accessToken = jwtUtil.generateAccessToken(user);
-        UserDto userDto = UserDto.builder()
-                .id(user.getId())
-                .name(user.getName())
-                .email(user.getEmail())
-                .profilePictureUrl(user.getProfilePictureUrl())
-                .timezone(user.getTimezone())
-                .build();
         return AuthResponse.builder()
                 .accessToken(accessToken)
-                .user(userDto)
                 .build();
     }
 }

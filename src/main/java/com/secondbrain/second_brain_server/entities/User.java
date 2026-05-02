@@ -1,5 +1,6 @@
 package com.secondbrain.second_brain_server.entities;
 
+import com.secondbrain.second_brain_server.dto.response.UserResponse;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -20,19 +21,21 @@ public class User {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private UUID id;
 
-    private String name;
-
     @Column(unique = true)
     private String email;
 
-    private String passwordHash;
+    private String password;
 
-    private String profilePictureUrl;
+    @Column(name = "first_name")
+    private String firstName;
 
-    private String timezone;
+    @Column(name = "last_name")
+    private String lastName;
 
+    @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
@@ -60,13 +63,11 @@ public class User {
         this.id = id;
     }
 
-    public com.secondbrain.second_brain_server.dto.response.UserDto toDto() {
-        return com.secondbrain.second_brain_server.dto.response.UserDto.builder()
+    public UserResponse toResponse() {
+        return UserResponse.builder()
                 .id(this.id)
-                .name(this.name)
+                .firstName(this.firstName)
                 .email(this.email)
-                .profilePictureUrl(this.profilePictureUrl)
-                .timezone(this.timezone)
                 .build();
     }
 }

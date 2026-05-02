@@ -18,9 +18,9 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     }
 
     @Override
-    public UserDetails loadUserByUsername(String userId) throws UsernameNotFoundException {
-        com.secondbrain.second_brain_server.entities.User user = userRepository.findById(UUID.fromString(userId))
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with id: " + userId));
+    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+        com.secondbrain.second_brain_server.entities.User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with email / username : " + email));
 
         return new UserPrincipal(user);
     }
