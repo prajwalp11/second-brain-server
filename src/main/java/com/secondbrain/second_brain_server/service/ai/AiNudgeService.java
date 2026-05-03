@@ -21,7 +21,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -45,7 +44,7 @@ public class AiNudgeService {
     @Transactional
     public void generateNudgesForAllDomains(UUID userId) {
         List<Domain> domains = domainRepository.findByUserId(userId);
-        LocalDate today = LocalDate.now();
+        LocalDateTime now = LocalDateTime.now();
 
         for (Domain domain : domains) {
             if (alreadySentToday(userId, domain.getId())) {
@@ -100,19 +99,19 @@ public class AiNudgeService {
 
     private Optional<NudgeType> evaluateNudgeType(Domain domain, List<SessionLog> recentLogs) {
         // Simplified logic for prototype. More complex rules would go here.
-        LocalDateTime today = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now();
 
         // MISSING_LOG: If domain is active and last log date is more than 2 days ago
         if (domain.getStatus() == DomainStatus.ACTIVE
                 && domain.getLastLogDate() != null
-                && domain.getLastLogDate().isBefore(today.minusDays(2))) {
+                && domain.getLastLogDate().isBefore(now.minusDays(2))) {
             return Optional.of(NudgeType.MISSING_LOG);
         }
 
         // STREAK_AT_RISK: If domain has a streak and last log date is yesterday, and no log today
-        if (domain.getCurrentStreak() > 0 && domain.getLastLogDate() != null && domain.getLastLogDate().isEqual(today.minusDays(1))) {
+        if (domain.getCurrentStreak() > 0 && domain.getLastLogDate() != null && domain.getLastLogDate().toLocalDate().isEqual(now.minusDays(1).toLocalDate())) {
             // Check if there's a log today
-            boolean loggedToday = sessionLogRepository.countByDomainIdAndLogDateBetween(domain.getId(), today, today) > 0;
+            boolean loggedToday = sessionLogRepository.countByDomainIdAndLogDateBetween(domain.getId(), now.withHour(0).withMinute(0).withSecond(0).withNano(0), now.withHour(23).withMinute(59).withSecond(59).withNano(999999999)) > 0;
             if (!loggedToday) {
                 return Optional.of(NudgeType.STREAK_AT_RISK);
             }
@@ -125,7 +124,7 @@ public class AiNudgeService {
     }
 
     private boolean alreadySentToday(UUID userId, UUID domainId) {
-        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+        LocalDateTime startOfDay = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0).withNano(0);
         return aiNudgeRepository.existsByUserIdAndDomainIdAndGeneratedAtAfter(userId, domainId, startOfDay);
     }
 }

@@ -2,15 +2,15 @@ package com.secondbrain.second_brain_server.dto.response;
 
 import lombok.*;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Data
 @Builder
 public class TimeSeriesPointDto {
-
-    private LocalDate date;
+    private LocalDateTime date;
     private Double value;
 }

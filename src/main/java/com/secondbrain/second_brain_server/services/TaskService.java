@@ -15,7 +15,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -58,8 +57,8 @@ public class TaskService {
     }
 
     public List<TaskDto> getTodayTasks(UUID userId) {
-        LocalDate today = LocalDate.now();
-        return taskRepository.findByUserIdAndDueDateAndStatusIn(userId, today, List.of(TaskStatus.TODO, TaskStatus.IN_PROGRESS))
+        LocalDateTime today = LocalDateTime.now();
+        return taskRepository.findByUserIdAndDueDateBetweenAndStatusIn(userId, today.withHour(0).withMinute(0).withSecond(0).withNano(0), today.withHour(23).withMinute(59).withSecond(59).withNano(999999999), List.of(TaskStatus.TODO, TaskStatus.IN_PROGRESS))
                 .stream().map(TaskDto::new).collect(Collectors.toList());
     }
 

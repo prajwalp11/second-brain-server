@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -61,7 +62,9 @@ public class WeeklyStatService {
     }
 
     private Double aggregateMetric(UUID domainId, String metricKey, LocalDate from, LocalDate to) {
-        return sessionMetricValueRepository.sumMetricForPeriod(domainId, metricKey, from, to).orElse(0.0);
+        LocalDateTime fromDateTime = from.atStartOfDay();
+        LocalDateTime toDateTime = to.atTime(23, 59, 59, 999999999);
+        return sessionMetricValueRepository.sumMetricForPeriod(domainId, metricKey, fromDateTime, toDateTime).orElse(0.0);
     }
 
     private Double resolveTarget(Domain domain, String metricKey) {

@@ -104,10 +104,10 @@ public class ExportService {
         // Export Personal Records
         List<PersonalRecord> prs = prRepository.findByUserId(userId);
         writer.println("PersonalRecords");
-        writer.println("id,userId,domainId,sessionLogId,metricKey,value,unit,achievedAt,previousValue");
-        prs.forEach(pr -> writer.printf("%s,%s,%s,%s,%s,%f,%s,%s,%f\n",
+        writer.println("id,userId,domainId,sessionLogId,metricKey,value,unit,achievedAt");
+        prs.forEach(pr -> writer.printf("%s,%s,%s,%s,%s,%f,%s,%s\n",
                 pr.getId(), pr.getUser().getId(), pr.getDomain().getId(), pr.getSessionLog().getId(),
-                pr.getMetricKey(), pr.getValue(), pr.getUnit(), pr.getAchievedAt(), pr.getPreviousValue()));
+                pr.getMetricKey(), pr.getValue(), pr.getUnit(), pr.getAchievedAt()));
         writer.println();
 
         // Export Milestones

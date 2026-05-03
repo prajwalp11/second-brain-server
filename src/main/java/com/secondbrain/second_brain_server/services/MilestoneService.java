@@ -17,7 +17,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -52,13 +51,13 @@ public class MilestoneService {
 
         Milestone savedMilestone = milestoneRepository.save(newMilestone);
         updateProgress(domain.getId()); // Update progress immediately after creation
-        return new MilestoneDto(savedMilestone);
+        return savedMilestone.toDto();
     }
 
     public List<MilestoneDto> getMilestonesForDomain(UUID domainId, UUID userId) {
         domainService.assertOwnership(domainId, userId); // Ensure user owns domain
         return milestoneRepository.findByDomainId(domainId).stream()
-                .map(MilestoneDto::new)
+                .map(Milestone::toDto)
                 .collect(Collectors.toList());
     }
 
@@ -72,12 +71,12 @@ public class MilestoneService {
 
         milestone.setStatus(status);
         if (status == MilestoneStatus.DONE) {
-            milestone.setCompletedAt(LocalDate.now());
+            milestone.setCompletedAt(LocalDateTime.now());
         } else {
             milestone.setCompletedAt(null); // Clear completed date if status changes from DONE
         }
         milestoneRepository.save(milestone);
-        return new MilestoneDto(milestone);
+        return milestone.toDto();
     }
 
     @Transactional
@@ -94,7 +93,7 @@ public class MilestoneService {
     public Optional<MilestoneDto> getNextMilestone(UUID domainId) {
         return milestoneRepository.findFirstByDomainIdAndStatusOrderByDeadlineAsc(domainId, MilestoneStatus.UPCOMING)
                 .or(() -> milestoneRepository.findFirstByDomainIdAndStatusOrderByDeadlineAsc(domainId, MilestoneStatus.IN_PROGRESS))
-                .map(MilestoneDto::new);
+                .map(Milestone::toDto);
     }
 
     private Double resolveCurrentValue(Milestone milestone) {
@@ -119,7 +118,7 @@ public class MilestoneService {
         if (milestone.getStatus() != MilestoneStatus.DONE && milestone.getCurrentValue() != null && milestone.getTargetValue() != null) {
             if (milestone.getCurrentValue() >= milestone.getTargetValue()) {
                 milestone.setStatus(MilestoneStatus.DONE);
-                milestone.setCompletedAt(milestone.getDomain().getLastLogDate() != null ? milestone.getDomain().getLastLogDate() : LocalDate.now());
+                milestone.setCompletedAt(milestone.getDomain().getLastLogDate() != null ? milestone.getDomain().getLastLogDate() : LocalDateTime.now());
                 return true;
             }
         }

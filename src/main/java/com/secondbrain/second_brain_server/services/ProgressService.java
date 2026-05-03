@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -41,9 +42,12 @@ public class ProgressService {
     }
 
     private List<TimeSeriesPointDto> buildTimeSeries(UUID domainId, String metricKey, LocalDate from, LocalDate to) {
-        return sessionMetricValueRepository.findMetricTimeSeries(domainId, metricKey, from, to).stream()
+        LocalDateTime fromDateTime = from.atStartOfDay();
+        LocalDateTime toDateTime = to.atTime(23, 59, 59, 999999999); // End of day
+
+        return sessionMetricValueRepository.findMetricTimeSeries(domainId, metricKey, fromDateTime, toDateTime).stream()
                 .map(projection -> TimeSeriesPointDto.builder()
-                        .date(projection.getDate())
+                        .date(projection.getDate()) // Now directly assign LocalDateTime
                         .value(projection.getValue())
                         .build())
                 .collect(Collectors.toList());

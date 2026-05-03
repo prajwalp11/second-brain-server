@@ -47,7 +47,7 @@ public class DashboardService {
 
         return DashboardResponse.builder()
                 .greeting(greeting)
-                .date(date)
+                .date(date.atStartOfDay())
                 .todayFocus(todayFocus)
                 .streaks(streaks)
                 .weeklyStats(weeklyStats)

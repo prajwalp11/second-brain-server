@@ -56,7 +56,7 @@ public class AiInsightService {
             LocalDate weekStart = LocalDate.now().minusWeeks(1).with(java.time.DayOfWeek.MONDAY); // Last week's start
             List<WeeklyStatDto> weeklyStats = weeklyStatService.getWeeklyStats(userId, weekStart); // Assuming this fetches for a specific user/domain
             List<PersonalRecordDto> prs = prRepository.findByUserId(userId).stream()
-                    .filter(pr -> pr.getAchievedAt().isAfter(weekStart))
+                    .filter(pr -> pr.getAchievedAt().isAfter(weekStart.atStartOfDay()))
                     .map(PersonalRecord::toDto)
                     .collect(Collectors.toList());
 
