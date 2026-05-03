@@ -22,9 +22,4 @@ public class UserContext {
     private List<TaskDto> pendingTasks;
     private List<WeeklyStatDto> weeklyStats;
     private Map<UUID, StreakDto> streaks;
-
-    public String toPromptString() {
-        // Placeholder for converting context to a prompt string
-        return null;
-    }
 }
