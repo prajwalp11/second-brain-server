@@ -226,6 +226,7 @@ public class DomainService {
                 .orElseThrow(() -> new ResourceNotFoundException("Domain", domainId))
                 .checkOwnership(userId);
     }
+    @Transactional(readOnly = true)
     public List<TimeSeriesPointResponse> getChartData(UUID domainId, UUID userId, int days) {
         Domain domain = assertOwnership(domainId, userId);
         LocalDate endDate = LocalDate.now();
