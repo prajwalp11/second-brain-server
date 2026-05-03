@@ -1,10 +1,10 @@
 package com.secondbrain.second_brain_server.entities;
 
+import com.secondbrain.second_brain_server.dto.response.MilestoneDto;
 import com.secondbrain.second_brain_server.enums.MilestoneStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -38,11 +38,43 @@ public class Milestone {
     @Enumerated(EnumType.STRING)
     private MilestoneStatus status;
 
-    private LocalDate deadline;
+    private LocalDateTime deadline;
 
-    private LocalDate completedAt;
+    private LocalDateTime completedAt;
 
     private boolean aiGenerated;
 
     private LocalDateTime createdAt;
+
+    private LocalDateTime updatedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public MilestoneDto toDto() {
+        double progress = (targetValue != null && targetValue > 0 && currentValue != null)
+                ? Math.min(100.0, (currentValue / targetValue) * 100.0)
+                : 0.0;
+        return MilestoneDto.builder()
+                .id(this.id)
+                .label(this.label)
+                .metricKey(this.metricKey)
+                .targetValue(this.targetValue)
+                .currentValue(this.currentValue)
+                .unit(this.unit)
+                .progressPercent(progress)
+                .status(this.status)
+                .deadline(this.deadline)
+                .completedAt(this.completedAt)
+                .build();
+    }
+
 }

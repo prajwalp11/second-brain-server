@@ -100,10 +100,12 @@ public class AiNudgeService {
 
     private Optional<NudgeType> evaluateNudgeType(Domain domain, List<SessionLog> recentLogs) {
         // Simplified logic for prototype. More complex rules would go here.
-        LocalDate today = LocalDate.now();
+        LocalDateTime today = LocalDateTime.now();
 
         // MISSING_LOG: If domain is active and last log date is more than 2 days ago
-        if (domain.getStatus() == DomainStatus.ACTIVE && domain.getLastLogDate() != null && domain.getLastLogDate().isBefore(today.minusDays(2))) {
+        if (domain.getStatus() == DomainStatus.ACTIVE
+                && domain.getLastLogDate() != null
+                && domain.getLastLogDate().isBefore(today.minusDays(2))) {
             return Optional.of(NudgeType.MISSING_LOG);
         }
 

@@ -1,10 +1,10 @@
 package com.secondbrain.second_brain_server.entities;
 
+import com.secondbrain.second_brain_server.dto.response.TaskDto;
 import com.secondbrain.second_brain_server.enums.TaskStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -37,7 +37,7 @@ public class Task {
     @Enumerated(EnumType.STRING)
     private TaskStatus status;
 
-    private LocalDate dueDate;
+    private LocalDateTime dueDate;
 
     private LocalDateTime completedAt;
 
@@ -46,4 +46,29 @@ public class Task {
     private boolean aiGenerated;
 
     private LocalDateTime createdAt;
+
+    private LocalDateTime updatedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
+    public TaskDto toDto() {
+        return TaskDto.builder()
+                .id(this.id)
+                .domainId(this.domain != null ? this.domain.getId() : null)
+                .title(this.title)
+                .description(this.description)
+                .status(this.status)
+                .dueDate(this.dueDate)
+                .progress(this.progress)
+                .aiGenerated(this.aiGenerated)
+                .build();
+    }
 }

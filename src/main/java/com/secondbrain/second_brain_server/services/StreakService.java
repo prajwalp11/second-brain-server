@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
@@ -39,8 +40,8 @@ public class StreakService {
     }
 
     public List<Domain> getStreakAtRiskDomains(UUID userId) {
-        LocalDate today = LocalDate.now();
-        LocalDate yesterday = today.minusDays(1);
+        LocalDateTime today = LocalDateTime.now();
+        LocalDateTime yesterday = today.minusDays(1);
 
         return domainRepository.findByUserIdAndStatus(userId, DomainStatus.ACTIVE).stream()
                 .filter(domain -> {

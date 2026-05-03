@@ -125,7 +125,7 @@ public class DomainService {
     }
 
     @Transactional
-    public void updateStreakForDomain(Domain domain, LocalDate logDate) {
+    public void updateStreakForDomain(Domain domain, LocalDateTime logDate) {
         // This is a simplified placeholder. Full streak calculation requires SessionLogService and StreakCalculator.
         // It will be properly implemented when SessionLogService is built.
         if (domain.getLastLogDate() == null || logDate.isAfter(domain.getLastLogDate())) {

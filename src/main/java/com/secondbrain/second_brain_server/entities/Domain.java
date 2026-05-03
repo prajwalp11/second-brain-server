@@ -8,7 +8,6 @@ import com.secondbrain.second_brain_server.exception.ForbiddenException;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -55,7 +54,7 @@ public class Domain {
 
     private Integer longestStreak;
 
-    private LocalDate lastLogDate;
+    private LocalDateTime lastLogDate;
 
     private LocalDateTime createdAt;
 
@@ -81,6 +80,17 @@ public class Domain {
             throw new ForbiddenException("User is not authorized to access this domain.");
         }
         return this;
+    }
+
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
     }
 
     public DomainDto toDto() {

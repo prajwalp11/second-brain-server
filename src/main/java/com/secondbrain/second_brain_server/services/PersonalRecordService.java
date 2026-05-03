@@ -91,7 +91,6 @@ public class PersonalRecordService {
 
         if (existingPrOpt.isPresent()) {
             pr = existingPrOpt.get();
-            pr.setPreviousValue(pr.getValue()); // Store current value as previous
             pr.setValue(newVal);
             pr.setAchievedAt(log.getLogDate());
             pr.setSessionLog(log);
@@ -104,7 +103,6 @@ public class PersonalRecordService {
                     .value(newVal)
                     .unit(unit)
                     .achievedAt(log.getLogDate())
-                    .previousValue(prevVal) // For first PR, previousValue is null or 0
                     .build();
         }
         return prRepository.save(pr).toDto();

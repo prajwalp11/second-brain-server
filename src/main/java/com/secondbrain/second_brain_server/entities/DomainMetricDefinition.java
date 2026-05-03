@@ -4,6 +4,7 @@ import com.secondbrain.second_brain_server.dto.response.MetricDefinitionDto;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
@@ -36,6 +37,21 @@ public class DomainMetricDefinition {
     private boolean isHigherBetter;
 
     private Integer displayOrder;
+
+    private LocalDateTime createdAt;
+
+    private  LocalDateTime updatedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
 
     public MetricDefinitionDto toDto() {
         return MetricDefinitionDto.builder()

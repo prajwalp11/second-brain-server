@@ -5,13 +5,16 @@ import com.secondbrain.second_brain_server.enums.FeelLabel;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDate;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "session_logs")
+@Table(name = "session_logs", indexes = {
+        @Index(name = "idx_session_log_domain_date", columnList = "domain_id, log_date"),
+        @Index(name = "idx_session_log_user", columnList = "user_id")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -33,7 +36,7 @@ public class SessionLog {
 
     private String sessionType;
 
-    private LocalDate logDate;
+    private LocalDateTime logDate;
 
     private Integer durationMinutes;
 
@@ -52,6 +55,19 @@ public class SessionLog {
 
     private LocalDateTime createdAt;
 
+    private LocalDateTime updatedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
+
     @OneToMany(mappedBy = "sessionLog", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<SessionMetricValue> metricValues;
 
@@ -67,7 +83,6 @@ public class SessionLog {
                 .notes(this.notes)
                 .linkedReferenceUrl(this.linkedReferenceUrl)
                 .aiInsight(this.aiInsight)
-                // Metrics and newPrs will be populated by service layer
                 .build();
     }
 }

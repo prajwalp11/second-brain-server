@@ -2,7 +2,8 @@ package com.secondbrain.second_brain_server.dto.response;
 
 import lombok.*;
 
-import java.time.LocalDate;
+
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Getter
@@ -17,7 +18,7 @@ public class PersonalRecordDto {
     private String label;
     private Double value;
     private String unit;
-    private LocalDate achievedAt;
+    private LocalDateTime achievedAt;
     private Double previousValue;
     private Double delta;
 }

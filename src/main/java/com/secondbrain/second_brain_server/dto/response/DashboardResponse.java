@@ -2,7 +2,8 @@ package com.secondbrain.second_brain_server.dto.response;
 
 import lombok.*;
 
-import java.time.LocalDate;
+
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -15,7 +16,7 @@ import java.util.UUID;
 public class DashboardResponse {
 
     private String greeting;
-    private LocalDate date;
+    private LocalDateTime date;
     private List<TaskDto> todayFocus;
     private Map<UUID, StreakDto> streaks;
     private List<WeeklyStatDto> weeklyStats;

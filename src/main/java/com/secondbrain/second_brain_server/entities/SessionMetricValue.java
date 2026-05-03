@@ -3,6 +3,7 @@ package com.secondbrain.second_brain_server.entities;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
@@ -27,4 +28,21 @@ public class SessionMetricValue {
     private Double numericValue;
 
     private String unit;
+
+    private LocalDateTime createdAt;
+
+    private LocalDateTime updatedAt;
+
+
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
+
 }

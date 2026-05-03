@@ -8,7 +8,11 @@ import com.secondbrain.second_brain_server.dto.response.StreakDto;
 import com.secondbrain.second_brain_server.dto.response.TaskDto;
 import com.secondbrain.second_brain_server.dto.response.WeeklyStatDto;
 import com.secondbrain.second_brain_server.entities.Domain;
-import com.secondbrain.second_brain_server.entities.SessionLog;
+import com.secondbrain.second_brain_server.entities.Milestone;
+import com.secondbrain.second_brain_server.entities.PersonalRecord;
+import com.secondbrain.second_brain_server.entities.SessionMetricValue;
+import com.secondbrain.second_brain_server.entities.Task;
+import com.secondbrain.second_brain_server.entities.User;
 import com.secondbrain.second_brain_server.enums.MilestoneStatus;
 import com.secondbrain.second_brain_server.enums.TaskStatus;
 import com.secondbrain.second_brain_server.repository.DomainRepository;
@@ -17,7 +21,7 @@ import com.secondbrain.second_brain_server.repository.PersonalRecordRepository;
 import com.secondbrain.second_brain_server.repository.SessionLogRepository;
 import com.secondbrain.second_brain_server.repository.SessionMetricValueRepository;
 import com.secondbrain.second_brain_server.repository.TaskRepository;
-import com.secondbrain.second_brain_server.services.StreakService;
+import com.secondbrain.second_brain_server.repository.UserRepository;
 import com.secondbrain.second_brain_server.services.WeeklyStatService;
 import com.secondbrain.second_brain_server.util.DateUtil;
 import lombok.RequiredArgsConstructor;
@@ -39,68 +43,86 @@ public class UserContextAssembler {
     private final DomainRepository domainRepository;
     private final MilestoneRepository milestoneRepository;
     private final TaskRepository taskRepository;
-    private final StreakService streakService; // Assuming StreakService can provide streak info
-    private final WeeklyStatService weeklyStatService; // Assuming WeeklyStatService can provide weekly stats
+    private final UserRepository userRepository;
+    private final WeeklyStatService weeklyStatService;
 
     public UserContext assemble(UUID userId) {
+        // Domains
         List<Domain> domains = domainRepository.findByUserId(userId);
-        List<DomainDto> domainDtos = domains.stream().map(Domain::toDto).collect(Collectors.toList());
+        List<DomainDto> domainDtos = domains.stream()
+                .map(Domain::toDto)
+                .collect(Collectors.toList());
 
-        // Fetch recent logs (e.g., last 30)
+        // Recent logs (last 30) with hydrated metrics
         Pageable pageable = PageRequest.of(0, 30);
-        List<SessionLog> recentLogsEntities = sessionLogRepository.findByUserIdOrderByLogDateDesc(userId, pageable).getContent();
-        List<SessionLogDto> recentLogDtos = recentLogsEntities.stream()
+        List<SessionLogDto> recentLogDtos = sessionLogRepository
+                .findByUserIdOrderByLogDateDesc(userId, pageable)
+                .getContent()
+                .stream()
                 .map(log -> {
                     SessionLogDto dto = log.toDto();
-                    // Hydrate metrics for each log
-                    dto.setMetrics(sessionMetricValueRepository.findBySessionLogId(log.getId()).stream()
+                    dto.setMetrics(sessionMetricValueRepository
+                            .findBySessionLogId(log.getId())
+                            .stream()
                             .collect(Collectors.toMap(
-                                    smv -> smv.getMetricKey(),
-                                    smv -> smv.getNumericValue()
+                                    SessionMetricValue::getMetricKey,
+                                    SessionMetricValue::getNumericValue
                             )));
                     return dto;
                 })
                 .collect(Collectors.toList());
 
-        List<PersonalRecordDto> prs = prRepository.findByUserId(userId).stream()
-                .map(pr -> pr.toDto()) // Assuming PersonalRecord has a toResponse method
+        // Personal records
+        List<PersonalRecordDto> prs = prRepository.findByUserId(userId)
+                .stream()
+                .map(PersonalRecord::toDto)
                 .collect(Collectors.toList());
 
-        List<MilestoneDto> milestones = milestoneRepository.findByDomainIdAndStatus(null, MilestoneStatus.IN_PROGRESS).stream() // Need to fetch for user's domains
-                .map(MilestoneDto::new) // Assuming MilestoneDto has a constructor from Milestone
+        // Milestones — fetch across all user's domains, not a single null domainId
+        List<UUID> domainIds = domains.stream()
+                .map(Domain::getId)
                 .collect(Collectors.toList());
 
-        List<TaskDto> pendingTasks = taskRepository.findByUserIdAndStatusIn(userId, Arrays.asList(TaskStatus.TODO, TaskStatus.IN_PROGRESS)).stream()
-                .map(TaskDto::new) // Assuming TaskDto has a constructor from Task
+        List<MilestoneDto> milestones = milestoneRepository
+                .findByDomainIdInAndStatus(domainIds, MilestoneStatus.IN_PROGRESS)
+                .stream()
+                .map(Milestone::toDto)
                 .collect(Collectors.toList());
 
-        // Streaks
+        // Pending tasks
+        List<TaskDto> pendingTasks = taskRepository
+                .findByUserIdAndStatusIn(userId, Arrays.asList(TaskStatus.TODO, TaskStatus.IN_PROGRESS))
+                .stream()
+                .map(Task::toDto)
+                .collect(Collectors.toList());
+
+        // Streaks — read directly from Domain entity (already maintained by StreakService)
         Map<UUID, StreakDto> streaks = new HashMap<>();
-        domains.forEach(domain -> {
-            // This might be inefficient if StreakService recalculates every time.
-            // Ideally, streak info would be stored on the Domain entity or fetched efficiently.
-            // For context, we'll use a simplified approach.
-            streaks.put(domain.getId(), StreakDto.builder()
-                    .domainId(domain.getId())
-                    .domainName(domain.getCustomName() != null ? domain.getCustomName() : domain.getDomainType().name())
-                    .currentStreak(domain.getCurrentStreak())
-                    .longestStreak(domain.getLongestStreak())
-                    .lastLogDate(domain.getLastLogDate())
-                    .build());
-        });
+        domains.forEach(domain -> streaks.put(domain.getId(), StreakDto.builder()
+                .domainId(domain.getId())
+                .domainName(domain.getCustomName() != null
+                        ? domain.getCustomName()
+                        : domain.getDomainType().name())
+                .currentStreak(domain.getCurrentStreak())
+                .longestStreak(domain.getLongestStreak())
+                .lastLogDate(domain.getLastLogDate())
+                .build()));
 
-
-        // Weekly Stats (for current week)
+        // Weekly stats for current week
         LocalDate weekStart = DateUtil.getWeekStart(LocalDate.now());
         List<WeeklyStatDto> weeklyStats = new ArrayList<>();
         for (Domain domain : domains) {
             weeklyStats.addAll(weeklyStatService.getWeeklyStatsForDomain(domain, weekStart));
         }
 
+        // User name for prompt personalisation
+        String userName = userRepository.findById(userId)
+                .map(User::getFirstName)
+                .orElse("User");
 
         return UserContext.builder()
                 .userId(userId)
-                // .userName(userRepository.findById(userId).map(User::getName).orElse("User")) // Requires UserRepository
+                .userName(userName)
                 .domains(domainDtos)
                 .recentLogs(recentLogDtos)
                 .prs(prs)
@@ -112,8 +134,10 @@ public class UserContextAssembler {
     }
 
     public UserContext assembleForDomain(UUID userId, UUID domainId) {
-        // This is a simplified version, could be optimized to fetch only relevant data for the domain
+        // TODO: optimise — currently fetches full user context then filters.
+        // Should query directly by domainId for each repo call to avoid over-fetching.
         UserContext fullContext = assemble(userId);
+
         List<DomainDto> domainSpecific = fullContext.getDomains().stream()
                 .filter(d -> d.getId().equals(domainId))
                 .collect(Collectors.toList());
@@ -123,15 +147,15 @@ public class UserContextAssembler {
                 .collect(Collectors.toList());
 
         List<PersonalRecordDto> prsSpecific = fullContext.getPrs().stream()
-                .filter(pr -> pr.getDomainId().equals(domainId)) // Assuming PersonalRecordDto has domainId
+                .filter(pr -> pr.getDomainId() != null && pr.getDomainId().equals(domainId))
                 .collect(Collectors.toList());
 
         List<MilestoneDto> milestonesSpecific = fullContext.getMilestones().stream()
-                .filter(m -> m.getDomainId().equals(domainId)) // Assuming MilestoneDto has domainId
+                .filter(m -> m.getDomainId() != null && m.getDomainId().equals(domainId))
                 .collect(Collectors.toList());
 
         List<TaskDto> tasksSpecific = fullContext.getPendingTasks().stream()
-                .filter(t -> t.getDomainId().equals(domainId)) // Assuming TaskDto has domainId
+                .filter(t -> t.getDomainId() != null && t.getDomainId().equals(domainId))
                 .collect(Collectors.toList());
 
         Map<UUID, StreakDto> streaksSpecific = new HashMap<>();
@@ -140,12 +164,12 @@ public class UserContextAssembler {
         }
 
         List<WeeklyStatDto> weeklyStatsSpecific = fullContext.getWeeklyStats().stream()
-                .filter(ws -> ws.getDomainId().equals(domainId)) // Assuming WeeklyStatDto has domainId
+                .filter(ws -> ws.getDomainId() != null && ws.getDomainId().equals(domainId))
                 .collect(Collectors.toList());
-
 
         return UserContext.builder()
                 .userId(userId)
+                .userName(fullContext.getUserName())
                 .domains(domainSpecific)
                 .recentLogs(logsSpecific)
                 .prs(prsSpecific)

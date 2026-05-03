@@ -2,7 +2,7 @@ package com.secondbrain.second_brain_server.dto.response;
 
 import lombok.*;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Getter
@@ -16,5 +16,5 @@ public class StreakDto {
     private String domainName;
     private Integer currentStreak;
     private Integer longestStreak;
-    private LocalDate lastLogDate;
+    private LocalDateTime lastLogDate;
 }

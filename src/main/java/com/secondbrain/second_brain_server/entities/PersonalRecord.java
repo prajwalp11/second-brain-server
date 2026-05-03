@@ -4,7 +4,7 @@ import com.secondbrain.second_brain_server.dto.response.PersonalRecordDto;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
@@ -38,9 +38,24 @@ public class PersonalRecord {
 
     private String unit;
 
-    private LocalDate achievedAt;
+    private LocalDateTime achievedAt;
 
-    private Double previousValue;
+    private LocalDateTime createdAt;
+
+    private LocalDateTime updatedAt;
+
+
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
+
 
     public PersonalRecordDto toDto() {
         return PersonalRecordDto.builder()
@@ -50,8 +65,6 @@ public class PersonalRecord {
                 .value(this.value)
                 .unit(this.unit)
                 .achievedAt(this.achievedAt)
-                .previousValue(this.previousValue)
-                .delta(this.previousValue != null ? this.value - this.previousValue : 0.0)
                 .build();
     }
 }
