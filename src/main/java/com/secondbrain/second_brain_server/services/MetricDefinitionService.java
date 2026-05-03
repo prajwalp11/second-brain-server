@@ -55,4 +55,17 @@ public class MetricDefinitionService {
         domainService.assertOwnership(metric.getDomain().getId(), userId);
         metricDefinitionRepository.delete(metric);
     }
+
+    @Transactional
+    public void reorderMetrics(UUID domainId, List<UUID> metricIds, UUID userId) {
+        domainService.assertOwnership(domainId, userId);
+        
+        for (int i = 0; i < metricIds.size(); i++) {
+            UUID metricId = metricIds.get(i);
+            DomainMetricDefinition metric = metricDefinitionRepository.findById(metricId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Metric", metricId));
+            metric.setDisplayOrder(i);
+            metricDefinitionRepository.save(metric);
+        }
+    }
 }

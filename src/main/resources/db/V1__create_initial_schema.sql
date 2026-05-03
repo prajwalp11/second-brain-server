@@ -127,7 +127,7 @@ CREATE TABLE milestones (
                             current_value DOUBLE PRECISION,
                             unit VARCHAR(100),
                             status VARCHAR(50),
-                            deadline TIMESTAMP,
+                            deadline DATE,
                             completed_at TIMESTAMP,
                             ai_generated BOOLEAN DEFAULT FALSE,
                             created_at TIMESTAMP DEFAULT NOW(),

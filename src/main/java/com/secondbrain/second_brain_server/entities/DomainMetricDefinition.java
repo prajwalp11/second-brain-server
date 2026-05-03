@@ -56,6 +56,7 @@ public class DomainMetricDefinition {
 
     public MetricDefinitionDto toDto() {
         return MetricDefinitionDto.builder()
+                .id(this.id)
                 .metricKey(this.metricKey)
                 .label(this.label)
                 .unit(this.unit)

@@ -2,7 +2,7 @@ package com.secondbrain.second_brain_server.dto.response;
 
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 @Getter
 @Setter
@@ -11,6 +11,6 @@ import java.time.LocalDateTime;
 @Data
 @Builder
 public class TimeSeriesPointDto {
-    private LocalDateTime date;
+    private LocalDate date;
     private Double value;
 }

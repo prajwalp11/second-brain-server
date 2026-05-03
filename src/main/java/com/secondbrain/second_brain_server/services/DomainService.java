@@ -4,6 +4,7 @@ import com.secondbrain.second_brain_server.dto.request.CreateDomainRequest;
 import com.secondbrain.second_brain_server.dto.request.UpdateDomainRequest;
 import com.secondbrain.second_brain_server.dto.response.DomainDto;
 import com.secondbrain.second_brain_server.dto.response.GeneratedSystemDto;
+import com.secondbrain.second_brain_server.dto.response.TimeSeriesPointDto;
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.entities.DomainMetricDefinition;
 import com.secondbrain.second_brain_server.entities.Milestone;
@@ -223,6 +224,26 @@ public class DomainService {
                 .orElseThrow(() -> new ResourceNotFoundException("Domain", domainId))
                 .checkOwnership(userId);
     }
+    public List<TimeSeriesPointDto> getChartData(UUID domainId, UUID userId, int days) {
+        Domain domain = assertOwnership(domainId, userId);
+        LocalDate endDate = LocalDate.now();
+        LocalDate startDate = endDate.minusDays(days - 1);
+        
+        return domain.getSessionLogs().stream()
+                .filter(log -> !log.getLogDate().isBefore(startDate) && !log.getLogDate().isAfter(endDate))
+                .collect(Collectors.groupingBy(
+                        log -> log.getLogDate(),
+                        Collectors.summingDouble(log -> 
+                                log.getMetricValues().stream()
+                                        .mapToDouble(mv -> mv.getNumericValue() != null ? mv.getNumericValue() : 0.0)
+                                        .sum()
+                        )
+                ))
+                .entrySet().stream()
+                .map(entry -> new TimeSeriesPointDto(entry.getKey(), entry.getValue()))
+                .sorted((a, b) -> a.getDate().compareTo(b.getDate()))
+                .collect(Collectors.toList());
+    }
+
+
 }
-
-

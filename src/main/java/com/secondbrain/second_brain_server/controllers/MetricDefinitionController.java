@@ -33,4 +33,13 @@ public class MetricDefinitionController {
         metricDefinitionService.deleteMetric(metricId, userId);
         return ResponseEntity.ok().build();
     }
+
+    @PutMapping("/domain/{domainId}/reorder")
+    public ResponseEntity<Void> reorderMetrics(
+            @PathVariable UUID domainId,
+            @RequestBody List<UUID> metricIds,
+            @CurrentUser UUID userId) {
+        metricDefinitionService.reorderMetrics(domainId, metricIds, userId);
+        return ResponseEntity.ok().build();
+    }
 }

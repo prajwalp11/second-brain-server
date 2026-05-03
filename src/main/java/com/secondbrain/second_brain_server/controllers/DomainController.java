@@ -4,6 +4,7 @@ import com.secondbrain.second_brain_server.dto.request.CreateDomainRequest;
 import com.secondbrain.second_brain_server.dto.request.UpdateDomainRequest;
 import com.secondbrain.second_brain_server.dto.response.DomainDto;
 import com.secondbrain.second_brain_server.dto.response.GeneratedSystemDto;
+import com.secondbrain.second_brain_server.dto.response.TimeSeriesPointDto;
 import com.secondbrain.second_brain_server.security.CurrentUser;
 import com.secondbrain.second_brain_server.services.DomainService;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,14 @@ public class DomainController {
     @GetMapping("/{domainId}")
     public ResponseEntity<DomainDto> getDomain(@PathVariable UUID domainId, @CurrentUser UUID userId) {
         return ResponseEntity.ok(domainService.getDomainById(domainId, userId));
+    }
+
+    @GetMapping("/{domainId}/chart-data")
+    public ResponseEntity<List<TimeSeriesPointDto>> getChartData(
+            @PathVariable UUID domainId,
+            @RequestParam(defaultValue = "30") int days,
+            @CurrentUser UUID userId) {
+        return ResponseEntity.ok(domainService.getChartData(domainId, userId, days));
     }
 
     @PostMapping

@@ -44,7 +44,7 @@ public class ProgressService {
     private List<TimeSeriesPointDto> buildTimeSeries(UUID domainId, String metricKey, LocalDate from, LocalDate to) {
         return sessionMetricValueRepository.findMetricTimeSeries(domainId, metricKey, from, to).stream()
                 .map(projection -> TimeSeriesPointDto.builder()
-                        .date(projection.getDate().atStartOfDay())
+                        .date(projection.getDate())
                         .value(projection.getValue())
                         .build())
                 .collect(Collectors.toList());
