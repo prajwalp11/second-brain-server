@@ -5,6 +5,7 @@ import com.secondbrain.second_brain_server.security.CurrentUser;
 import com.secondbrain.second_brain_server.services.AuthService;
 import com.secondbrain.second_brain_server.services.ExportService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
 
 @RestController
+@Slf4j
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
 public class UserController {

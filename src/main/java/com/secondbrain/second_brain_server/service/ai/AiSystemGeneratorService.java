@@ -11,12 +11,14 @@ import com.secondbrain.second_brain_server.external.GeminiClient;
 import com.secondbrain.second_brain_server.external.GeminiMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 @Slf4j
 public class AiSystemGeneratorService {

@@ -14,6 +14,7 @@ import com.secondbrain.second_brain_server.repository.DomainRepository;
 import com.secondbrain.second_brain_server.repository.UserRepository;
 import com.secondbrain.second_brain_server.service.ai.AiNudgeService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;

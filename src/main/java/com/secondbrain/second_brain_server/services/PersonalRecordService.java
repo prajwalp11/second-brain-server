@@ -9,6 +9,7 @@ import com.secondbrain.second_brain_server.entities.User;
 import com.secondbrain.second_brain_server.repository.DomainMetricDefinitionRepository;
 import com.secondbrain.second_brain_server.repository.PersonalRecordRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;

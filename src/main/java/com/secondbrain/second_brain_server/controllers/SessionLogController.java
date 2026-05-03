@@ -5,6 +5,7 @@ import com.secondbrain.second_brain_server.dto.response.SessionLogResponse;
 import com.secondbrain.second_brain_server.security.CurrentUser;
 import com.secondbrain.second_brain_server.services.SessionLogService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
 
 @RestController
+@Slf4j
 @RequestMapping("/api/session-logs")
 @RequiredArgsConstructor
 public class SessionLogController {

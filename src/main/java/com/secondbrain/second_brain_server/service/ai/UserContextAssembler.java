@@ -25,6 +25,7 @@ import com.secondbrain.second_brain_server.repository.UserRepository;
 import com.secondbrain.second_brain_server.services.WeeklyStatService;
 import com.secondbrain.second_brain_server.util.DateUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;

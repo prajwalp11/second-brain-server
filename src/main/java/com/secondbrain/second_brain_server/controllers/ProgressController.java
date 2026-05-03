@@ -6,6 +6,7 @@ import com.secondbrain.second_brain_server.security.CurrentUser;
 import com.secondbrain.second_brain_server.services.PersonalRecordService;
 import com.secondbrain.second_brain_server.services.ProgressService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,6 +15,7 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
+@Slf4j
 @RequestMapping("/api/progress")
 @RequiredArgsConstructor
 public class ProgressController {

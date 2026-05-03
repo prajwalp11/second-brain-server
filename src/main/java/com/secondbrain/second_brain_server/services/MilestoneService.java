@@ -14,6 +14,7 @@ import com.secondbrain.second_brain_server.repository.MilestoneRepository;
 import com.secondbrain.second_brain_server.repository.PersonalRecordRepository;
 import com.secondbrain.second_brain_server.repository.SessionMetricValueRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +36,7 @@ public class MilestoneService {
 
     @Transactional
     public MilestoneResponse createMilestone(UUID userId, CreateMilestoneRequest request) {
+        log.info("Creating milestone for user: {}, label: {}", userId, request.getLabel());
         Domain domain = domainService.assertOwnership(request.getDomainId(), userId);
 
         Milestone newMilestone = Milestone.builder()

@@ -10,6 +10,7 @@ import com.secondbrain.second_brain_server.repository.SessionLogRepository;
 import com.secondbrain.second_brain_server.repository.SessionMetricValueRepository;
 import com.secondbrain.second_brain_server.util.DateUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -20,6 +21,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class WeeklyStatService {
 

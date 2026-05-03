@@ -13,6 +13,7 @@ import com.secondbrain.second_brain_server.repository.SessionLogRepository;
 import com.secondbrain.second_brain_server.repository.SessionMetricValueRepository;
 import com.secondbrain.second_brain_server.service.ai.AiInsightService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;

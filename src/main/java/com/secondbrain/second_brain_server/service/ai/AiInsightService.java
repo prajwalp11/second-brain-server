@@ -11,6 +11,7 @@ import com.secondbrain.second_brain_server.repository.SessionLogRepository;
 import com.secondbrain.second_brain_server.services.WeeklyStatService; // Needed for weekly insight
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -22,6 +23,7 @@ import java.time.LocalDate; // Added for weekly insight
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 @Slf4j
 public class AiInsightService {

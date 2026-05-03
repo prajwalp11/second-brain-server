@@ -25,6 +25,7 @@ import com.secondbrain.second_brain_server.repository.TaskRepository;
 import com.secondbrain.second_brain_server.service.ai.AiSystemGeneratorService;
 import com.secondbrain.second_brain_server.util.MetricValidator;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,6 +60,7 @@ public class DomainService {
 
     @Transactional
     public DomainResponse createDomain(UUID userId, CreateDomainRequest request) {
+        log.info("Creating domain for user: {}, type: {}", userId, request.getDomainType());
         if (domainRepository.existsByUserIdAndDomainType(userId, request.getDomainType())) {
             throw new DomainAlreadyExistsException(request.getDomainType());
         }

@@ -8,6 +8,7 @@ import com.secondbrain.second_brain_server.enums.DomainType;
 import com.secondbrain.second_brain_server.enums.NudgeType;
 import com.secondbrain.second_brain_server.enums.SkillLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.text.DecimalFormat;
