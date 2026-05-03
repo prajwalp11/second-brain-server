@@ -32,6 +32,7 @@ public class DomainMetricDefinition {
 
     private boolean isTrackedPerSession;
 
+    @Column(name = "is_pr")
     private boolean isPR;
 
     private boolean isHigherBetter;

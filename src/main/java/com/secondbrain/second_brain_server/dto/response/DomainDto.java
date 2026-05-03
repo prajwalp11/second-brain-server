@@ -6,7 +6,7 @@ import com.secondbrain.second_brain_server.enums.SkillLevel;
 import lombok.*;
 
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -28,7 +28,7 @@ public class DomainDto {
     private String linkedResourceTitle;
     private Integer currentStreak;
     private Integer longestStreak;
-    private LocalDateTime lastLogDate;
+    private LocalDate lastLogDate;
     private List<MetricDefinitionDto> metrics;
     private MilestoneDto nextMilestone;
 }

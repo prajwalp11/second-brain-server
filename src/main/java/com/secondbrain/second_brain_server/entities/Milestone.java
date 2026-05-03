@@ -5,6 +5,7 @@ import com.secondbrain.second_brain_server.enums.MilestoneStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -38,7 +39,7 @@ public class Milestone {
     @Enumerated(EnumType.STRING)
     private MilestoneStatus status;
 
-    private LocalDateTime deadline;
+    private LocalDate deadline;
 
     private LocalDateTime completedAt;
 

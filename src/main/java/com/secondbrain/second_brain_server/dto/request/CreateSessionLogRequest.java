@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
 
@@ -22,7 +22,7 @@ public class CreateSessionLogRequest {
     private String sessionType;
 
     @NotNull
-    private LocalDateTime logDate;
+    private LocalDate logDate;
 
     private Integer durationMinutes;
 

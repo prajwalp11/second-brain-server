@@ -42,12 +42,9 @@ public class ProgressService {
     }
 
     private List<TimeSeriesPointDto> buildTimeSeries(UUID domainId, String metricKey, LocalDate from, LocalDate to) {
-        LocalDateTime fromDateTime = from.atStartOfDay();
-        LocalDateTime toDateTime = to.atTime(23, 59, 59, 999999999); // End of day
-
-        return sessionMetricValueRepository.findMetricTimeSeries(domainId, metricKey, fromDateTime, toDateTime).stream()
+        return sessionMetricValueRepository.findMetricTimeSeries(domainId, metricKey, from, to).stream()
                 .map(projection -> TimeSeriesPointDto.builder()
-                        .date(projection.getDate()) // Now directly assign LocalDateTime
+                        .date(projection.getDate().atStartOfDay())
                         .value(projection.getValue())
                         .build())
                 .collect(Collectors.toList());

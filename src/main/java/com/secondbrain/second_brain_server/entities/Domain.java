@@ -8,6 +8,7 @@ import com.secondbrain.second_brain_server.exception.ForbiddenException;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -41,7 +42,7 @@ public class Domain {
     @Enumerated(EnumType.STRING)
     private DomainStatus status;
 
-    @Lob
+    @Column(columnDefinition = "TEXT")
     private String planDescription;
 
     private String weeklySchedule;
@@ -54,7 +55,7 @@ public class Domain {
 
     private Integer longestStreak;
 
-    private LocalDateTime lastLogDate;
+    private LocalDate lastLogDate;
 
     private LocalDateTime createdAt;
 

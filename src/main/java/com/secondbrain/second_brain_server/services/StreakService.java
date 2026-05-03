@@ -40,20 +40,18 @@ public class StreakService {
     }
 
     public List<Domain> getStreakAtRiskDomains(UUID userId) {
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime todayStart = now.withHour(0).withMinute(0).withSecond(0).withNano(0);
-        LocalDateTime todayEnd = now.withHour(23).withMinute(59).withSecond(59).withNano(999999999);
-        LocalDateTime yesterday = now.minusDays(1);
+        LocalDate today = LocalDate.now();
+        LocalDate yesterday = today.minusDays(1);
 
         return domainRepository.findByUserIdAndStatus(userId, DomainStatus.ACTIVE).stream()
                 .filter(domain -> {
                     // A streak is at risk if the last log was yesterday and no log today,
                     // AND the domain is scheduled for today.
-                    if (domain.getLastLogDate() != null && domain.getLastLogDate().toLocalDate().isEqual(yesterday.toLocalDate())) {
-                        boolean isScheduledToday = DateUtil.isScheduledDay(domain.getWeeklySchedule(), now.toLocalDate());
+                    if (domain.getLastLogDate() != null && domain.getLastLogDate().isEqual(yesterday)) {
+                        boolean isScheduledToday = DateUtil.isScheduledDay(domain.getWeeklySchedule(), today);
                         if (isScheduledToday) {
                             // Check if there's actually no log today
-                            return sessionLogRepository.countByDomainIdAndLogDateBetween(domain.getId(), todayStart, todayEnd) == 0;
+                            return sessionLogRepository.countByDomainIdAndLogDateBetween(domain.getId(), today, today) == 0;
                         }
                     }
                     return false;
@@ -61,5 +59,5 @@ public class StreakService {
                 .collect(Collectors.toList());
     }
 
-    // The computeStreak method is now delegated to StreakCalculator utility class
+    // The computeStreak method is today delegated to StreakCalculator utility class
 }

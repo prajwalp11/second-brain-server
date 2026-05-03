@@ -62,14 +62,12 @@ public class WeeklyStatService {
     }
 
     private Double aggregateMetric(UUID domainId, String metricKey, LocalDate from, LocalDate to) {
-        LocalDateTime fromDateTime = from.atStartOfDay();
-        LocalDateTime toDateTime = to.atTime(23, 59, 59, 999999999);
-        return sessionMetricValueRepository.sumMetricForPeriod(domainId, metricKey, fromDateTime, toDateTime).orElse(0.0);
+        return sessionMetricValueRepository.sumMetricForPeriod(domainId, metricKey, from, to).orElse(0.0);
     }
 
     private Double resolveTarget(Domain domain, String metricKey) {
         // Placeholder: LLD doesn't specify how targets are stored/resolved.
         // This would typically involve parsing domain.getWeeklySchedule() or a dedicated target field.
-        return null; // No target for now
+        return null; // No target for today
     }
 }

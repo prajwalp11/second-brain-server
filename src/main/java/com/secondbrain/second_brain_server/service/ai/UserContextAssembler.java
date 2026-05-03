@@ -105,7 +105,7 @@ public class UserContextAssembler {
                         : domain.getDomainType().name())
                 .currentStreak(domain.getCurrentStreak())
                 .longestStreak(domain.getLongestStreak())
-                .lastLogDate(domain.getLastLogDate())
+                .lastLogDate(domain.getLastLogDate() != null ? domain.getLastLogDate().atStartOfDay() : null)
                 .build()));
 
         // Weekly stats for current week

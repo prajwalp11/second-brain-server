@@ -27,9 +27,9 @@ public class TaskController {
         return ResponseEntity.ok(taskService.getTasksForUser(userId, status != null ? List.of(status) : null, domainId));
     }
 
-    @GetMapping("/today")
-    public ResponseEntity<List<TaskDto>> getTodayTasks(@CurrentUser UUID userId) {
-        return ResponseEntity.ok(taskService.getTodayTasks(userId));
+    @GetMapping("/upcoming")
+    public ResponseEntity<List<TaskDto>> getUpcomingTasks(@CurrentUser UUID userId) {
+        return ResponseEntity.ok(taskService.getUpcomingTasks(userId));
     }
 
     @PostMapping

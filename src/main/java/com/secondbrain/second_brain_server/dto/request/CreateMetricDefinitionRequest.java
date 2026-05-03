@@ -4,7 +4,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
-import java.time.LocalDate;
 import java.util.UUID;
 
 @Getter
@@ -12,21 +11,24 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CreateMilestoneRequest {
+public class CreateMetricDefinitionRequest {
 
     @NotNull
     private UUID domainId;
 
     @NotBlank
-    private String label;
-
-    @NotBlank
     private String metricKey;
 
-    @NotNull
-    private Double targetValue;
+    @NotBlank
+    private String label;
 
     private String unit;
 
-    private LocalDate deadline;
+    private boolean isTrackedPerSession;
+
+    private boolean isPR;
+
+    private boolean isHigherBetter;
+
+    private Integer displayOrder;
 }

@@ -4,6 +4,7 @@ import com.secondbrain.second_brain_server.entities.Milestone;
 import com.secondbrain.second_brain_server.enums.MilestoneStatus;
 import lombok.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -23,7 +24,7 @@ public class MilestoneDto {
     private String unit;
     private Double progressPercent;
     private MilestoneStatus status;
-    private LocalDateTime deadline;
+    private LocalDate deadline;
     private LocalDateTime completedAt;
 
 }

@@ -39,7 +39,7 @@ public class DashboardService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", userId));
 
         String greeting = buildGreeting(user.getFirstName(), date);
-        List<TaskDto> todayFocus = taskService.getTodayTasks(userId);
+        List<TaskDto> todayFocus = taskService.getUpcomingTasks(userId);
         List<Domain> domains = domainRepository.findByUserId(userId);
         Map<UUID, StreakDto> streaks = buildStreakMap(domains);
         List<WeeklyStatDto> weeklyStats = weeklyStatService.getWeeklyStats(userId, date); // Get stats for current week
@@ -76,7 +76,7 @@ public class DashboardService {
                         .domainName(domain.getCustomName() != null ? domain.getCustomName() : domain.getDomainType().name())
                         .currentStreak(domain.getCurrentStreak())
                         .longestStreak(domain.getLongestStreak())
-                        .lastLogDate(domain.getLastLogDate())
+                        .lastLogDate(domain.getLastLogDate() != null ? domain.getLastLogDate().atStartOfDay() : null)
                         .build())
                 .collect(Collectors.toMap(StreakDto::getDomainId, dto -> dto));
     }

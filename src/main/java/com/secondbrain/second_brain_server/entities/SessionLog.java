@@ -6,6 +6,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -36,7 +37,7 @@ public class SessionLog {
 
     private String sessionType;
 
-    private LocalDateTime logDate;
+    private LocalDate logDate;
 
     private Integer durationMinutes;
 
@@ -45,7 +46,7 @@ public class SessionLog {
     @Enumerated(EnumType.STRING)
     private FeelLabel feelLabel;
 
-    @Lob
+    @Column(columnDefinition = "TEXT")
     private String notes;
 
     private String linkedReferenceUrl;

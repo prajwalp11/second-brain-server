@@ -4,6 +4,7 @@ import com.secondbrain.second_brain_server.dto.response.PersonalRecordDto;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -38,7 +39,7 @@ public class PersonalRecord {
 
     private String unit;
 
-    private LocalDateTime achievedAt;
+    private LocalDate achievedAt;
 
     private LocalDateTime createdAt;
 

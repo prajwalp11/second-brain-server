@@ -4,7 +4,7 @@ import com.secondbrain.second_brain_server.entities.Task;
 import com.secondbrain.second_brain_server.enums.TaskStatus;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Getter
@@ -19,9 +19,10 @@ public class TaskDto {
     private String title;
     private String description;
     private TaskStatus status;
-    private LocalDateTime dueDate;
+    private LocalDate dueDate;
     private Integer progress;
     private boolean aiGenerated;
+    private Long daysRemaining;
 
     public TaskDto(Task task) {
         this.id = task.getId();

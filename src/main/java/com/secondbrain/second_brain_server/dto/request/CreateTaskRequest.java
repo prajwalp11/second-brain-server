@@ -4,7 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Getter
@@ -21,5 +21,5 @@ public class CreateTaskRequest {
 
     private String description;
 
-    private LocalDateTime dueDate;
+    private LocalDate dueDate;
 }

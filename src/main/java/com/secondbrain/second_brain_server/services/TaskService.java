@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -26,7 +27,7 @@ import java.util.stream.Collectors;
 public class TaskService {
 
     private final TaskRepository taskRepository;
-    private final DomainService domainService; // To assert ownership
+    private final DomainService domainService;
 
     @Transactional
     public TaskDto createTask(UUID userId, CreateTaskRequest request) {
@@ -39,27 +40,39 @@ public class TaskService {
                 .description(request.getDescription())
                 .status(TaskStatus.TODO)
                 .dueDate(request.getDueDate())
-                .aiGenerated(false) // User created
+                .aiGenerated(false)
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        return new TaskDto(taskRepository.save(newTask)); }
+        return new TaskDto(taskRepository.save(newTask));
+    }
 
     public List<TaskDto> getTasksForUser(UUID userId, List<TaskStatus> statuses, UUID domainId) {
         List<Task> tasks;
         if (domainId != null) {
-            domainService.assertOwnership(domainId, userId); // Ensure user owns domain
+            domainService.assertOwnership(domainId, userId);
             tasks = taskRepository.findByDomainId(domainId);
-        } else {
+        } else if (statuses != null && !statuses.isEmpty()) {
             tasks = taskRepository.findByUserIdAndStatusIn(userId, statuses);
+        } else {
+            tasks = taskRepository.findByUserId(userId);
         }
         return tasks.stream().map(TaskDto::new).collect(Collectors.toList());
     }
 
-    public List<TaskDto> getTodayTasks(UUID userId) {
-        LocalDateTime today = LocalDateTime.now();
-        return taskRepository.findByUserIdAndDueDateBetweenAndStatusIn(userId, today.withHour(0).withMinute(0).withSecond(0).withNano(0), today.withHour(23).withMinute(59).withSecond(59).withNano(999999999), List.of(TaskStatus.TODO, TaskStatus.IN_PROGRESS))
-                .stream().map(TaskDto::new).collect(Collectors.toList());
+    public List<TaskDto> getUpcomingTasks(UUID userId) {
+        LocalDate today = LocalDate.now();
+        LocalDate thirtyDaysFromNow = today.plusDays(30);
+        return taskRepository.findByUserIdAndDueDateBetweenAndStatusIn(userId, today, thirtyDaysFromNow, List.of(TaskStatus.TODO, TaskStatus.IN_PROGRESS))
+                .stream()
+                .map(task -> {
+                    TaskDto dto = new TaskDto(task);
+                    if (task.getDueDate() != null) {
+                        dto.setDaysRemaining(java.time.temporal.ChronoUnit.DAYS.between(today, task.getDueDate()));
+                    }
+                    return dto;
+                })
+                .collect(Collectors.toList());
     }
 
     @Transactional
@@ -100,10 +113,10 @@ public class TaskService {
         List<Task> newTasks = tasks.stream()
                 .map(dto -> Task.builder()
                         .user(new User(userId))
-                        .domain(domainService.assertOwnership(dto.getDomainId(), userId)) // Ensure domain ownership
+                        .domain(domainService.assertOwnership(dto.getDomainId(), userId))
                         .title(dto.getTitle())
                         .description(dto.getDescription())
-                        .status(TaskStatus.TODO) // AI generated tasks start as TODO
+                        .status(TaskStatus.TODO)
                         .dueDate(dto.getDueDate())
                         .aiGenerated(true)
                         .createdAt(LocalDateTime.now())

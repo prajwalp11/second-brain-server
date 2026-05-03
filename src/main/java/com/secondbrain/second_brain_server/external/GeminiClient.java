@@ -38,6 +38,11 @@ public class GeminiClient {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
     }
+    
+    @jakarta.annotation.PostConstruct
+    public void init() {
+        log.info("GeminiClient initialized with model: {}, key starts with: {}", model, apiKey != null ? apiKey.substring(0, Math.min(10, apiKey.length())) : "NULL");
+    }
 
     public String complete(String systemPrompt, List<GeminiMessage> messages) {
         return retryOnRateLimit(() -> {
@@ -73,15 +78,11 @@ public class GeminiClient {
             List<GeminiMessage> fullMessages = new ArrayList<>();
             if (systemPrompt != null && !systemPrompt.isEmpty()) {
                 fullMessages.add(new GeminiMessage("user", List.of(Map.of("text", systemPrompt))));
-                fullMessages.add(new GeminiMessage("model", List.of(Map.of("text", "Okay, I understand. I will respond in JSON format.")))); // Acknowledge system prompt
+                fullMessages.add(new GeminiMessage("model", List.of(Map.of("text", "Okay, I understand. I will respond in JSON format."))));
             }
             fullMessages.addAll(messages);
 
             Map<String, Object> requestBody = buildRequest(fullMessages);
-            // Add JSON response format instruction
-            ((Map<String, Object>)((List)requestBody.get("contents")).get(((List)requestBody.get("contents")).size() - 1)).put("role", "user");
-            ((Map<String, Object>)((List)requestBody.get("contents")).get(((List)requestBody.get("contents")).size() - 1)).put("parts", List.of(Map.of("text", "Your response MUST be valid JSON.")));
-
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 

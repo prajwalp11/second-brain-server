@@ -118,7 +118,7 @@ public class MilestoneService {
         if (milestone.getStatus() != MilestoneStatus.DONE && milestone.getCurrentValue() != null && milestone.getTargetValue() != null) {
             if (milestone.getCurrentValue() >= milestone.getTargetValue()) {
                 milestone.setStatus(MilestoneStatus.DONE);
-                milestone.setCompletedAt(milestone.getDomain().getLastLogDate() != null ? milestone.getDomain().getLastLogDate() : LocalDateTime.now());
+                milestone.setCompletedAt(milestone.getDomain().getLastLogDate() != null ? milestone.getDomain().getLastLogDate().atStartOfDay() : LocalDateTime.now());
                 return true;
             }
         }

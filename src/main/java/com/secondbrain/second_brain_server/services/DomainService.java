@@ -28,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -124,7 +125,7 @@ public class DomainService {
     }
 
     @Transactional
-    public void updateStreakForDomain(Domain domain, LocalDateTime logDate) {
+    public void updateStreakForDomain(Domain domain, LocalDate logDate) {
         // This is a simplified placeholder. Full streak calculation requires SessionLogService and StreakCalculator.
         // It will be properly implemented when SessionLogService is built.
         if (domain.getLastLogDate() == null || logDate.isAfter(domain.getLastLogDate())) {
