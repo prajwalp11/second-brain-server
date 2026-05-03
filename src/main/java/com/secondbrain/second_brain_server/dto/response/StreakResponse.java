@@ -10,7 +10,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class StreakDto {
+public class StreakResponse {
 
     private UUID domainId;
     private String domainName;

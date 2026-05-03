@@ -1,7 +1,7 @@
 package com.secondbrain.second_brain_server.services;
 
 import com.secondbrain.second_brain_server.dto.request.CreateMilestoneRequest;
-import com.secondbrain.second_brain_server.dto.response.MilestoneDto;
+import com.secondbrain.second_brain_server.dto.response.MilestoneResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.entities.DomainMetricDefinition;
 import com.secondbrain.second_brain_server.entities.Milestone;
@@ -34,7 +34,7 @@ public class MilestoneService {
     private final DomainMetricDefinitionRepository metricDefinitionRepository; // To check if metric is PR
 
     @Transactional
-    public MilestoneDto createMilestone(UUID userId, CreateMilestoneRequest request) {
+    public MilestoneResponse createMilestone(UUID userId, CreateMilestoneRequest request) {
         Domain domain = domainService.assertOwnership(request.getDomainId(), userId);
 
         Milestone newMilestone = Milestone.builder()
@@ -51,18 +51,18 @@ public class MilestoneService {
 
         Milestone savedMilestone = milestoneRepository.save(newMilestone);
         updateProgress(domain.getId()); // Update progress immediately after creation
-        return savedMilestone.toDto();
+        return savedMilestone.toResponse();
     }
 
-    public List<MilestoneDto> getMilestonesForDomain(UUID domainId, UUID userId) {
+    public List<MilestoneResponse> getMilestonesForDomain(UUID domainId, UUID userId) {
         domainService.assertOwnership(domainId, userId); // Ensure user owns domain
         return milestoneRepository.findByDomainId(domainId).stream()
-                .map(Milestone::toDto)
+                .map(Milestone::toResponse)
                 .collect(Collectors.toList());
     }
 
     @Transactional
-    public MilestoneDto updateStatus(UUID milestoneId, UUID userId, MilestoneStatus status) {
+    public MilestoneResponse updateStatus(UUID milestoneId, UUID userId, MilestoneStatus status) {
         Milestone milestone = milestoneRepository.findById(milestoneId)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone", milestoneId));
 
@@ -76,7 +76,7 @@ public class MilestoneService {
             milestone.setCompletedAt(null); // Clear completed date if status changes from DONE
         }
         milestoneRepository.save(milestone);
-        return milestone.toDto();
+        return milestone.toResponse();
     }
 
     @Transactional
@@ -90,10 +90,10 @@ public class MilestoneService {
         }
     }
 
-    public Optional<MilestoneDto> getNextMilestone(UUID domainId) {
+    public Optional<MilestoneResponse> getNextMilestone(UUID domainId) {
         return milestoneRepository.findFirstByDomainIdAndStatusOrderByDeadlineAsc(domainId, MilestoneStatus.UPCOMING)
                 .or(() -> milestoneRepository.findFirstByDomainIdAndStatusOrderByDeadlineAsc(domainId, MilestoneStatus.IN_PROGRESS))
-                .map(Milestone::toDto);
+                .map(Milestone::toResponse);
     }
 
     private Double resolveCurrentValue(Milestone milestone) {

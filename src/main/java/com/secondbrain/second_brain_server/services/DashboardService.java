@@ -1,10 +1,10 @@
 package com.secondbrain.second_brain_server.services;
 
-import com.secondbrain.second_brain_server.dto.response.AiNudgeDto;
+import com.secondbrain.second_brain_server.dto.response.AiNudgeResponse;
 import com.secondbrain.second_brain_server.dto.response.DashboardResponse;
-import com.secondbrain.second_brain_server.dto.response.StreakDto;
-import com.secondbrain.second_brain_server.dto.response.TaskDto;
-import com.secondbrain.second_brain_server.dto.response.WeeklyStatDto;
+import com.secondbrain.second_brain_server.dto.response.StreakResponse;
+import com.secondbrain.second_brain_server.dto.response.TaskResponse;
+import com.secondbrain.second_brain_server.dto.response.WeeklyStatResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.entities.User;
 import com.secondbrain.second_brain_server.enums.TaskStatus;
@@ -39,11 +39,11 @@ public class DashboardService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", userId));
 
         String greeting = buildGreeting(user.getFirstName(), date);
-        List<TaskDto> todayFocus = taskService.getUpcomingTasks(userId);
+        List<TaskResponse> todayFocus = taskService.getUpcomingTasks(userId);
         List<Domain> domains = domainRepository.findByUserId(userId);
-        Map<UUID, StreakDto> streaks = buildStreakMap(domains);
-        List<WeeklyStatDto> weeklyStats = weeklyStatService.getWeeklyStats(userId, date); // Get stats for current week
-        Optional<AiNudgeDto> aiNudge = aiNudgeService.getUnreadNudge(userId);
+        Map<UUID, StreakResponse> streaks = buildStreakMap(domains);
+        List<WeeklyStatResponse> weeklyStats = weeklyStatService.getWeeklyStats(userId, date); // Get stats for current week
+        Optional<AiNudgeResponse> aiNudge = aiNudgeService.getUnreadNudge(userId);
 
         return DashboardResponse.builder()
                 .greeting(greeting)
@@ -69,15 +69,15 @@ public class DashboardService {
         return String.format("%s, %s!", timeOfDay, name);
     }
 
-    private Map<UUID, StreakDto> buildStreakMap(List<Domain> domains) {
+    private Map<UUID, StreakResponse> buildStreakMap(List<Domain> domains) {
         return domains.stream()
-                .map(domain -> StreakDto.builder()
+                .map(domain -> StreakResponse.builder()
                         .domainId(domain.getId())
                         .domainName(domain.getCustomName() != null ? domain.getCustomName() : domain.getDomainType().name())
                         .currentStreak(domain.getCurrentStreak())
                         .longestStreak(domain.getLongestStreak())
                         .lastLogDate(domain.getLastLogDate() != null ? domain.getLastLogDate().atStartOfDay() : null)
                         .build())
-                .collect(Collectors.toMap(StreakDto::getDomainId, dto -> dto));
+                .collect(Collectors.toMap(StreakResponse::getDomainId, dto -> dto));
     }
 }

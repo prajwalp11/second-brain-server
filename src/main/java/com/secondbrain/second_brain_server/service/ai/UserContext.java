@@ -15,11 +15,11 @@ import java.util.UUID;
 public class UserContext {
     private UUID userId;
     private String userName;
-    private List<DomainDto> domains;
-    private List<SessionLogDto> recentLogs;
-    private List<PersonalRecordDto> prs;
-    private List<MilestoneDto> milestones;
-    private List<TaskDto> pendingTasks;
-    private List<WeeklyStatDto> weeklyStats;
-    private Map<UUID, StreakDto> streaks;
+    private List<DomainResponse> domains;
+    private List<SessionLogResponse> recentLogs;
+    private List<PersonalRecordResponse> prs;
+    private List<MilestoneResponse> milestones;
+    private List<TaskResponse> pendingTasks;
+    private List<WeeklyStatResponse> weeklyStats;
+    private Map<UUID, StreakResponse> streaks;
 }

@@ -1,9 +1,9 @@
 package com.secondbrain.second_brain_server.services;
 
-import com.secondbrain.second_brain_server.dto.response.MilestoneDto;
-import com.secondbrain.second_brain_server.dto.response.PersonalRecordDto;
+import com.secondbrain.second_brain_server.dto.response.MilestoneResponse;
+import com.secondbrain.second_brain_server.dto.response.PersonalRecordResponse;
 import com.secondbrain.second_brain_server.dto.response.ProgressResponse;
-import com.secondbrain.second_brain_server.dto.response.TimeSeriesPointDto;
+import com.secondbrain.second_brain_server.dto.response.TimeSeriesPointResponse;
 import com.secondbrain.second_brain_server.repository.PersonalRecordRepository;
 import com.secondbrain.second_brain_server.repository.SessionMetricValueRepository;
 import com.secondbrain.second_brain_server.repository.SessionMetricValueRepository.TimeSeriesProjection;
@@ -28,9 +28,9 @@ public class ProgressService {
     public ProgressResponse getProgress(UUID domainId, UUID userId, String metricKey, LocalDate from, LocalDate to) {
         domainService.assertOwnership(domainId, userId);
 
-        List<TimeSeriesPointDto> timeSeries = buildTimeSeries(domainId, metricKey, from, to);
-        List<MilestoneDto> milestones = milestoneService.getMilestonesForDomain(domainId, userId);
-        List<PersonalRecordDto> prs = prService.getPrsForDomain(domainId);
+        List<TimeSeriesPointResponse> timeSeries = buildTimeSeries(domainId, metricKey, from, to);
+        List<MilestoneResponse> milestones = milestoneService.getMilestonesForDomain(domainId, userId);
+        List<PersonalRecordResponse> prs = prService.getPrsForDomain(domainId);
 
         return ProgressResponse.builder()
                 .domainId(domainId)
@@ -41,9 +41,9 @@ public class ProgressService {
                 .build();
     }
 
-    private List<TimeSeriesPointDto> buildTimeSeries(UUID domainId, String metricKey, LocalDate from, LocalDate to) {
+    private List<TimeSeriesPointResponse> buildTimeSeries(UUID domainId, String metricKey, LocalDate from, LocalDate to) {
         return sessionMetricValueRepository.findMetricTimeSeries(domainId, metricKey, from, to).stream()
-                .map(projection -> TimeSeriesPointDto.builder()
+                .map(projection -> TimeSeriesPointResponse.builder()
                         .date(projection.getDate())
                         .value(projection.getValue())
                         .build())

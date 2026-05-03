@@ -6,10 +6,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.secondbrain.second_brain_server.dto.request.AiChatRequest;
 import com.secondbrain.second_brain_server.dto.request.ApplyAiActionRequest;
-import com.secondbrain.second_brain_server.dto.response.AiActionDto;
+import com.secondbrain.second_brain_server.dto.response.AiActionResponse;
 import com.secondbrain.second_brain_server.dto.response.AiChatResponse;
-import com.secondbrain.second_brain_server.dto.response.AiConversationDto;
-import com.secondbrain.second_brain_server.dto.response.AiMessageDto;
+import com.secondbrain.second_brain_server.dto.response.AiConversationResponse;
+import com.secondbrain.second_brain_server.dto.response.AiMessageResponse;
 import com.secondbrain.second_brain_server.entities.AiConversation;
 import com.secondbrain.second_brain_server.entities.AiMessage;
 import com.secondbrain.second_brain_server.entities.User;
@@ -70,14 +70,14 @@ public class AiChatService {
         String rawAiResponse = geminiClient.completeWithJson(systemPrompt, geminiMessages);
 
         String replyText;
-        List<AiActionDto> proposedActions = new ArrayList<>();
+        List<AiActionResponse> proposedActions = new ArrayList<>();
 
         try {
             JsonNode rootNode = objectMapper.readTree(rawAiResponse);
             replyText = rootNode.path("reply").asText("I'm sorry, I couldn't process that.");
             JsonNode actionsNode = rootNode.path("proposedActions");
             if (actionsNode.isArray()) {
-                proposedActions = objectMapper.convertValue(actionsNode, new TypeReference<List<AiActionDto>>() {});
+                proposedActions = objectMapper.convertValue(actionsNode, new TypeReference<List<AiActionResponse>>() {});
             }
         } catch (JsonProcessingException e) {
             log.error("Failed to parse AI chat response JSON: {}", rawAiResponse, e);
@@ -93,9 +93,9 @@ public class AiChatService {
                 .build();
     }
 
-    public List<AiConversationDto> getConversations(UUID userId) {
+    public List<AiConversationResponse> getConversations(UUID userId) {
         return aiConversationRepository.findByUserIdOrderByUpdatedAtDesc(userId).stream()
-                .map(conv -> AiConversationDto.builder()
+                .map(conv -> AiConversationResponse.builder()
                         .id(conv.getId())
                         .preview(conv.getPreview())
                         .updatedAt(conv.getUpdatedAt())
@@ -103,12 +103,12 @@ public class AiChatService {
                 .collect(Collectors.toList());
     }
 
-    public List<AiMessageDto> getMessages(UUID conversationId, UUID userId) {
+    public List<AiMessageResponse> getMessages(UUID conversationId, UUID userId) {
         AiConversation conversation = aiConversationRepository.findByIdAndUserId(conversationId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Conversation", conversationId));
 
         return aiMessageRepository.findByConversationIdOrderByCreatedAtAsc(conversation.getId()).stream()
-                .map(msg -> AiMessageDto.builder()
+                .map(msg -> AiMessageResponse.builder()
                         .id(msg.getId())
                         .role(msg.getRole())
                         .content(msg.getContent())

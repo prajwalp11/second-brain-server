@@ -1,6 +1,6 @@
 package com.secondbrain.second_brain_server.controllers;
 
-import com.secondbrain.second_brain_server.dto.response.PersonalRecordDto;
+import com.secondbrain.second_brain_server.dto.response.PersonalRecordResponse;
 import com.secondbrain.second_brain_server.dto.response.ProgressResponse;
 import com.secondbrain.second_brain_server.security.CurrentUser;
 import com.secondbrain.second_brain_server.services.PersonalRecordService;
@@ -31,7 +31,7 @@ public class ProgressController {
     }
 
     @GetMapping("/{domainId}/prs")
-    public ResponseEntity<List<PersonalRecordDto>> getPrs(@PathVariable UUID domainId) {
+    public ResponseEntity<List<PersonalRecordResponse>> getPrs(@PathVariable UUID domainId) {
         return ResponseEntity.ok(prService.getPrsForDomain(domainId));
     }
 }

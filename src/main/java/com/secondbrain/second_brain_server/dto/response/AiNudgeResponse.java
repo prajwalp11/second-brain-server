@@ -10,7 +10,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class AiNudgeDto {
+public class AiNudgeResponse {
 
     private UUID id;
     private String message;

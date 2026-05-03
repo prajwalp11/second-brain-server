@@ -2,8 +2,6 @@ package com.secondbrain.second_brain_server.dto.response;
 
 import lombok.*;
 
-
-import java.time.LocalDate;
 import java.util.UUID;
 
 @Getter
@@ -11,14 +9,13 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class PersonalRecordDto {
+public class WeeklyStatResponse {
 
     private UUID domainId;
+    private String domainName;
     private String metricKey;
     private String label;
     private Double value;
+    private Double target;
     private String unit;
-    private LocalDate achievedAt;
-    private Double previousValue;
-    private Double delta;
 }

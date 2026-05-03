@@ -2,6 +2,8 @@ package com.secondbrain.second_brain_server.dto.response;
 
 import lombok.*;
 
+
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Getter
@@ -9,14 +11,14 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class MetricDefinitionDto {
+public class PersonalRecordResponse {
 
-    private UUID id;
+    private UUID domainId;
     private String metricKey;
     private String label;
+    private Double value;
     private String unit;
-    private boolean isTrackedPerSession;
-    private boolean isPR;
-    private boolean isHigherBetter;
-    private Integer displayOrder;
+    private LocalDate achievedAt;
+    private Double previousValue;
+    private Double delta;
 }

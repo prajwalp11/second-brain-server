@@ -1,7 +1,7 @@
 package com.secondbrain.second_brain_server.controllers;
 
 import com.secondbrain.second_brain_server.dto.request.CreateMetricDefinitionRequest;
-import com.secondbrain.second_brain_server.dto.response.MetricDefinitionDto;
+import com.secondbrain.second_brain_server.dto.response.MetricDefinitionResponse;
 import com.secondbrain.second_brain_server.security.CurrentUser;
 import com.secondbrain.second_brain_server.services.MetricDefinitionService;
 import lombok.RequiredArgsConstructor;
@@ -19,12 +19,12 @@ public class MetricDefinitionController {
     private final MetricDefinitionService metricDefinitionService;
 
     @GetMapping("/domain/{domainId}")
-    public ResponseEntity<List<MetricDefinitionDto>> getMetrics(@PathVariable UUID domainId, @CurrentUser UUID userId) {
+    public ResponseEntity<List<MetricDefinitionResponse>> getMetrics(@PathVariable UUID domainId, @CurrentUser UUID userId) {
         return ResponseEntity.ok(metricDefinitionService.getMetricsForDomain(domainId, userId));
     }
 
     @PostMapping
-    public ResponseEntity<MetricDefinitionDto> createMetric(@RequestBody CreateMetricDefinitionRequest request, @CurrentUser UUID userId) {
+    public ResponseEntity<MetricDefinitionResponse> createMetric(@RequestBody CreateMetricDefinitionRequest request, @CurrentUser UUID userId) {
         return ResponseEntity.ok(metricDefinitionService.createMetric(request, userId));
     }
 

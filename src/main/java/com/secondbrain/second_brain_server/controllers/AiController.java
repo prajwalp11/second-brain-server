@@ -3,9 +3,9 @@ package com.secondbrain.second_brain_server.controllers;
 import com.secondbrain.second_brain_server.dto.request.AiChatRequest;
 import com.secondbrain.second_brain_server.dto.request.ApplyAiActionRequest;
 import com.secondbrain.second_brain_server.dto.response.AiChatResponse;
-import com.secondbrain.second_brain_server.dto.response.AiConversationDto;
-import com.secondbrain.second_brain_server.dto.response.AiMessageDto;
-import com.secondbrain.second_brain_server.dto.response.AiNudgeDto;
+import com.secondbrain.second_brain_server.dto.response.AiConversationResponse;
+import com.secondbrain.second_brain_server.dto.response.AiMessageResponse;
+import com.secondbrain.second_brain_server.dto.response.AiNudgeResponse;
 import com.secondbrain.second_brain_server.security.CurrentUser;
 import com.secondbrain.second_brain_server.service.ai.AiChatService;
 import com.secondbrain.second_brain_server.service.ai.AiNudgeService;
@@ -30,12 +30,12 @@ public class AiController {
     }
 
     @GetMapping("/conversations")
-    public ResponseEntity<List<AiConversationDto>> getConversations(@CurrentUser UUID userId) {
+    public ResponseEntity<List<AiConversationResponse>> getConversations(@CurrentUser UUID userId) {
         return ResponseEntity.ok(aiChatService.getConversations(userId));
     }
 
     @GetMapping("/conversations/{conversationId}/messages")
-    public ResponseEntity<List<AiMessageDto>> getMessages(@PathVariable UUID conversationId, @CurrentUser UUID userId) {
+    public ResponseEntity<List<AiMessageResponse>> getMessages(@PathVariable UUID conversationId, @CurrentUser UUID userId) {
         return ResponseEntity.ok(aiChatService.getMessages(conversationId, userId));
     }
 
@@ -46,7 +46,7 @@ public class AiController {
     }
 
     @GetMapping("/nudge")
-    public ResponseEntity<AiNudgeDto> getNudge(@CurrentUser UUID userId) {
+    public ResponseEntity<AiNudgeResponse> getNudge(@CurrentUser UUID userId) {
         return ResponseEntity.ok(aiNudgeService.getUnreadNudge(userId).orElse(null));
     }
 

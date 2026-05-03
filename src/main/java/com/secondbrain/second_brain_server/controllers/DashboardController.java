@@ -1,7 +1,7 @@
 package com.secondbrain.second_brain_server.controllers;
 
 import com.secondbrain.second_brain_server.dto.response.DashboardResponse;
-import com.secondbrain.second_brain_server.dto.response.WeeklyStatDto;
+import com.secondbrain.second_brain_server.dto.response.WeeklyStatResponse;
 import com.secondbrain.second_brain_server.security.CurrentUser;
 import com.secondbrain.second_brain_server.services.DashboardService;
 import com.secondbrain.second_brain_server.services.WeeklyStatService;
@@ -30,7 +30,7 @@ public class DashboardController {
     }
 
     @GetMapping("/weekly-snapshot")
-    public ResponseEntity<List<WeeklyStatDto>> getWeeklySnapshot(@RequestParam LocalDate weekStart, @CurrentUser UUID userId) {
+    public ResponseEntity<List<WeeklyStatResponse>> getWeeklySnapshot(@RequestParam LocalDate weekStart, @CurrentUser UUID userId) {
         return ResponseEntity.ok(weeklyStatService.getWeeklyStats(userId, weekStart));
     }
 }

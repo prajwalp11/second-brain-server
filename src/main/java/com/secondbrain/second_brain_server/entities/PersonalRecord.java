@@ -1,6 +1,6 @@
 package com.secondbrain.second_brain_server.entities;
 
-import com.secondbrain.second_brain_server.dto.response.PersonalRecordDto;
+import com.secondbrain.second_brain_server.dto.response.PersonalRecordResponse;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -58,8 +58,8 @@ public class PersonalRecord {
     }
 
 
-    public PersonalRecordDto toDto() {
-        return PersonalRecordDto.builder()
+    public PersonalRecordResponse toResponse() {
+        return PersonalRecordResponse.builder()
                 .domainId(this.domain != null ? this.domain.getId() : null)
                 .metricKey(this.metricKey)
                 .label(null) // Populated by service layer

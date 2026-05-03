@@ -17,9 +17,9 @@ public class DashboardResponse {
 
     private String greeting;
     private LocalDateTime date;
-    private List<TaskDto> todayFocus;
-    private Map<UUID, StreakDto> streaks;
-    private List<WeeklyStatDto> weeklyStats;
-    private AiNudgeDto aiNudge;
-    private List<TaskDto> upcomingTasks;
+    private List<TaskResponse> todayFocus;
+    private Map<UUID, StreakResponse> streaks;
+    private List<WeeklyStatResponse> weeklyStats;
+    private AiNudgeResponse aiNudge;
+    private List<TaskResponse> upcomingTasks;
 }

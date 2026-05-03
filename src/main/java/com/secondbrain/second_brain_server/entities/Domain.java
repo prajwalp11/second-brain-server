@@ -1,6 +1,6 @@
 package com.secondbrain.second_brain_server.entities;
 
-import com.secondbrain.second_brain_server.dto.response.DomainDto;
+import com.secondbrain.second_brain_server.dto.response.DomainResponse;
 import com.secondbrain.second_brain_server.enums.DomainStatus;
 import com.secondbrain.second_brain_server.enums.DomainType;
 import com.secondbrain.second_brain_server.enums.SkillLevel;
@@ -94,8 +94,8 @@ public class Domain {
         this.updatedAt = LocalDateTime.now();
     }
 
-    public DomainDto toDto() {
-        return DomainDto.builder()
+    public DomainResponse toResponse() {
+        return DomainResponse.builder()
                 .id(this.id)
                 .domainType(this.domainType)
                 .customName(this.customName)
@@ -109,7 +109,7 @@ public class Domain {
                 .longestStreak(this.longestStreak)
                 .lastLogDate(this.lastLogDate)
                 // Metrics and Milestones will be populated by service layer or specific DTO mappers
-                .metrics(this.metricDefinitions != null ? this.metricDefinitions.stream().map(DomainMetricDefinition::toDto).collect(Collectors.toList()) : null)
+                .metrics(this.metricDefinitions != null ? this.metricDefinitions.stream().map(DomainMetricDefinition::toResponse).collect(Collectors.toList()) : null)
                 // nextMilestone will be populated by service layer
                 .build();
     }

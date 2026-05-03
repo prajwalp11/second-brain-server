@@ -1,7 +1,7 @@
 package com.secondbrain.second_brain_server.services;
 
 import com.secondbrain.second_brain_server.dto.request.CreateMetricDefinitionRequest;
-import com.secondbrain.second_brain_server.dto.response.MetricDefinitionDto;
+import com.secondbrain.second_brain_server.dto.response.MetricDefinitionResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.entities.DomainMetricDefinition;
 import com.secondbrain.second_brain_server.exception.ResourceNotFoundException;
@@ -21,16 +21,16 @@ public class MetricDefinitionService {
     private final DomainMetricDefinitionRepository metricDefinitionRepository;
     private final DomainService domainService;
 
-    public List<MetricDefinitionDto> getMetricsForDomain(UUID domainId, UUID userId) {
+    public List<MetricDefinitionResponse> getMetricsForDomain(UUID domainId, UUID userId) {
         domainService.assertOwnership(domainId, userId);
         return metricDefinitionRepository.findByDomainIdOrderByDisplayOrder(domainId)
                 .stream()
-                .map(DomainMetricDefinition::toDto)
+                .map(DomainMetricDefinition::toResponse)
                 .collect(Collectors.toList());
     }
 
     @Transactional
-    public MetricDefinitionDto createMetric(CreateMetricDefinitionRequest request, UUID userId) {
+    public MetricDefinitionResponse createMetric(CreateMetricDefinitionRequest request, UUID userId) {
         Domain domain = domainService.assertOwnership(request.getDomainId(), userId);
 
         DomainMetricDefinition metric = DomainMetricDefinition.builder()
@@ -44,7 +44,7 @@ public class MetricDefinitionService {
                 .displayOrder(request.getDisplayOrder())
                 .build();
 
-        return metricDefinitionRepository.save(metric).toDto();
+        return metricDefinitionRepository.save(metric).toResponse();
     }
 
     @Transactional

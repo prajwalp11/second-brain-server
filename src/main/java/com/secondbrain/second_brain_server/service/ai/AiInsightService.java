@@ -1,7 +1,7 @@
 package com.secondbrain.second_brain_server.service.ai;
 
-import com.secondbrain.second_brain_server.dto.response.PersonalRecordDto;
-import com.secondbrain.second_brain_server.dto.response.WeeklyStatDto;
+import com.secondbrain.second_brain_server.dto.response.PersonalRecordResponse;
+import com.secondbrain.second_brain_server.dto.response.WeeklyStatResponse;
 import com.secondbrain.second_brain_server.entities.PersonalRecord;
 import com.secondbrain.second_brain_server.entities.SessionLog;
 import com.secondbrain.second_brain_server.external.GeminiClient;
@@ -33,7 +33,7 @@ public class AiInsightService {
     private final WeeklyStatService weeklyStatService; // Inject WeeklyStatService
 
     @Async
-    public void generateSessionInsight(SessionLog sessionLog, List<PersonalRecordDto> newPrs) {
+    public void generateSessionInsight(SessionLog sessionLog, List<PersonalRecordResponse> newPrs) {
         try {
             // Fetch last 5 logs for context, excluding the current one
             List<SessionLog> recentLogs = sessionLogRepository.findTopNByDomainIdOrderByLogDateDesc(sessionLog.getDomain().getId(), PageRequest.of(0, 5));
@@ -54,10 +54,10 @@ public class AiInsightService {
     public String generateWeeklyInsight(UUID userId, UUID domainId) {
         try {
             LocalDate weekStart = LocalDate.now().minusWeeks(1).with(java.time.DayOfWeek.MONDAY); // Last week's start
-            List<WeeklyStatDto> weeklyStats = weeklyStatService.getWeeklyStats(userId, weekStart); // Assuming this fetches for a specific user/domain
-            List<PersonalRecordDto> prs = prRepository.findByUserId(userId).stream()
+            List<WeeklyStatResponse> weeklyStats = weeklyStatService.getWeeklyStats(userId, weekStart); // Assuming this fetches for a specific user/domain
+            List<PersonalRecordResponse> prs = prRepository.findByUserId(userId).stream()
                     .filter(pr -> pr.getAchievedAt().isAfter(weekStart))
-                    .map(PersonalRecord::toDto)
+                    .map(PersonalRecord::toResponse)
                     .collect(Collectors.toList());
 
             String systemPrompt = promptBuilder.weeklyInsight(weeklyStats, prs);

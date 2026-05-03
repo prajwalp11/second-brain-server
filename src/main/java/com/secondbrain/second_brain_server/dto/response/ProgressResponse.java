@@ -14,7 +14,7 @@ public class ProgressResponse {
 
     private UUID domainId;
     private String metricKey;
-    private List<TimeSeriesPointDto> timeSeries;
-    private List<MilestoneDto> milestones;
-    private List<PersonalRecordDto> prs;
+    private List<TimeSeriesPointResponse> timeSeries;
+    private List<MilestoneResponse> milestones;
+    private List<PersonalRecordResponse> prs;
 }

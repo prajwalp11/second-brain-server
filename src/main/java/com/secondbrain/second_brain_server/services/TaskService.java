@@ -2,7 +2,7 @@ package com.secondbrain.second_brain_server.services;
 
 import com.secondbrain.second_brain_server.dto.request.CreateTaskRequest;
 import com.secondbrain.second_brain_server.dto.request.UpdateTaskStatusRequest;
-import com.secondbrain.second_brain_server.dto.response.TaskDto;
+import com.secondbrain.second_brain_server.dto.response.TaskResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.entities.Task;
 import com.secondbrain.second_brain_server.entities.User;
@@ -30,7 +30,7 @@ public class TaskService {
     private final DomainService domainService;
 
     @Transactional
-    public TaskDto createTask(UUID userId, CreateTaskRequest request) {
+    public TaskResponse createTask(UUID userId, CreateTaskRequest request) {
         Domain domain = domainService.assertOwnership(request.getDomainId(), userId);
 
         Task newTask = Task.builder()
@@ -44,10 +44,10 @@ public class TaskService {
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        return new TaskDto(taskRepository.save(newTask));
+        return new TaskResponse(taskRepository.save(newTask));
     }
 
-    public List<TaskDto> getTasksForUser(UUID userId, List<TaskStatus> statuses, UUID domainId) {
+    public List<TaskResponse> getTasksForUser(UUID userId, List<TaskStatus> statuses, UUID domainId) {
         List<Task> tasks;
         if (domainId != null) {
             domainService.assertOwnership(domainId, userId);
@@ -57,16 +57,16 @@ public class TaskService {
         } else {
             tasks = taskRepository.findByUserId(userId);
         }
-        return tasks.stream().map(TaskDto::new).collect(Collectors.toList());
+        return tasks.stream().map(TaskResponse::new).collect(Collectors.toList());
     }
 
-    public List<TaskDto> getUpcomingTasks(UUID userId) {
+    public List<TaskResponse> getUpcomingTasks(UUID userId) {
         LocalDate today = LocalDate.now();
         LocalDate thirtyDaysFromNow = today.plusDays(30);
         return taskRepository.findByUserIdAndDueDateBetweenAndStatusIn(userId, today, thirtyDaysFromNow, List.of(TaskStatus.TODO, TaskStatus.IN_PROGRESS))
                 .stream()
                 .map(task -> {
-                    TaskDto dto = new TaskDto(task);
+                    TaskResponse dto = new TaskResponse(task);
                     if (task.getDueDate() != null) {
                         dto.setDaysRemaining(java.time.temporal.ChronoUnit.DAYS.between(today, task.getDueDate()));
                     }
@@ -76,7 +76,7 @@ public class TaskService {
     }
 
     @Transactional
-    public TaskDto updateTaskStatus(UUID taskId, UUID userId, UpdateTaskStatusRequest request) {
+    public TaskResponse updateTaskStatus(UUID taskId, UUID userId, UpdateTaskStatusRequest request) {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task", taskId));
 
@@ -94,7 +94,7 @@ public class TaskService {
         });
         Optional.ofNullable(request.getProgress()).ifPresent(task::setProgress);
 
-        return new TaskDto(taskRepository.save(task));
+        return new TaskResponse(taskRepository.save(task));
     }
 
     @Transactional
@@ -109,7 +109,7 @@ public class TaskService {
     }
 
     @Transactional
-    public List<TaskDto> bulkCreateFromAi(UUID userId, List<TaskDto> tasks) {
+    public List<TaskResponse> bulkCreateFromAi(UUID userId, List<TaskResponse> tasks) {
         List<Task> newTasks = tasks.stream()
                 .map(dto -> Task.builder()
                         .user(new User(userId))
@@ -122,6 +122,6 @@ public class TaskService {
                         .createdAt(LocalDateTime.now())
                         .build())
                 .collect(Collectors.toList());
-        return taskRepository.saveAll(newTasks).stream().map(TaskDto::new).collect(Collectors.toList());
+        return taskRepository.saveAll(newTasks).stream().map(TaskResponse::new).collect(Collectors.toList());
     }
 }

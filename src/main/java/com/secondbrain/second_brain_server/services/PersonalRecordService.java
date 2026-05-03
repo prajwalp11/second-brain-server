@@ -1,6 +1,6 @@
 package com.secondbrain.second_brain_server.services;
 
-import com.secondbrain.second_brain_server.dto.response.PersonalRecordDto;
+import com.secondbrain.second_brain_server.dto.response.PersonalRecordResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.entities.DomainMetricDefinition;
 import com.secondbrain.second_brain_server.entities.PersonalRecord;
@@ -29,8 +29,8 @@ public class PersonalRecordService {
     private final DomainMetricDefinitionRepository metricDefinitionRepository;
 
     @Transactional
-    public List<PersonalRecordDto> checkAndUpdatePrs(SessionLog log, Map<String, Double> metrics) {
-        List<PersonalRecordDto> newPrs = new ArrayList<>();
+    public List<PersonalRecordResponse> checkAndUpdatePrs(SessionLog log, Map<String, Double> metrics) {
+        List<PersonalRecordResponse> newPrs = new ArrayList<>();
         List<DomainMetricDefinition> prTrackableMetrics = metricDefinitionRepository.findPrMetricsByDomainId(log.getDomain().getId());
 
         for (DomainMetricDefinition metricDef : prTrackableMetrics) {
@@ -41,7 +41,7 @@ public class PersonalRecordService {
                 Double oldMetricValue = existingPrOpt.map(PersonalRecord::getValue).orElse(null);
 
                 if (oldMetricValue == null || isBetter(newMetricValue, oldMetricValue, metricDef.isHigherBetter())) {
-                    PersonalRecordDto prDto = upsertPr(log, metricDef.getMetricKey(), newMetricValue, metricDef.getUnit(), oldMetricValue);
+                    PersonalRecordResponse prDto = upsertPr(log, metricDef.getMetricKey(), newMetricValue, metricDef.getUnit(), oldMetricValue);
                     // Set label for DTO
                     prDto.setLabel(metricDef.getLabel());
                     newPrs.add(prDto);
@@ -51,10 +51,10 @@ public class PersonalRecordService {
         return newPrs;
     }
 
-    public List<PersonalRecordDto> getPrsForDomain(UUID domainId) {
+    public List<PersonalRecordResponse> getPrsForDomain(UUID domainId) {
         return prRepository.findByDomainId(domainId).stream()
                 .map(pr -> {
-                    PersonalRecordDto dto = pr.toDto();
+                    PersonalRecordResponse dto = pr.toResponse();
                     // Populate label from metric definition
                     metricDefinitionRepository.findByDomainIdAndMetricKey(domainId, pr.getMetricKey())
                             .ifPresent(def -> dto.setLabel(def.getLabel()));
@@ -63,10 +63,10 @@ public class PersonalRecordService {
                 .collect(Collectors.toList());
     }
 
-    public Page<PersonalRecordDto> getPrsForUser(UUID userId, Pageable pageable) {
+    public Page<PersonalRecordResponse> getPrsForUser(UUID userId, Pageable pageable) {
         return prRepository.findByUserIdOrderByAchievedAtDesc(userId, pageable)
                 .map(pr -> {
-                    PersonalRecordDto dto = pr.toDto();
+                    PersonalRecordResponse dto = pr.toResponse();
                     // Populate label from metric definition (requires fetching domainId from PR)
                     if (pr.getDomain() != null) {
                         metricDefinitionRepository.findByDomainIdAndMetricKey(pr.getDomain().getId(), pr.getMetricKey())
@@ -84,7 +84,7 @@ public class PersonalRecordService {
         }
     }
 
-    private PersonalRecordDto upsertPr(SessionLog log, String metricKey, Double newVal, String unit, Double prevVal) {
+    private PersonalRecordResponse upsertPr(SessionLog log, String metricKey, Double newVal, String unit, Double prevVal) {
         Optional<PersonalRecord> existingPrOpt = prRepository.findByDomainIdAndMetricKey(log.getDomain().getId(), metricKey);
         PersonalRecord pr;
 
@@ -104,6 +104,6 @@ public class PersonalRecordService {
                     .achievedAt(log.getLogDate())
                     .build();
         }
-        return prRepository.save(pr).toDto();
+        return prRepository.save(pr).toResponse();
     }
 }

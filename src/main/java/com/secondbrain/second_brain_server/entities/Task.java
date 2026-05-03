@@ -1,6 +1,6 @@
 package com.secondbrain.second_brain_server.entities;
 
-import com.secondbrain.second_brain_server.dto.response.TaskDto;
+import com.secondbrain.second_brain_server.dto.response.TaskResponse;
 import com.secondbrain.second_brain_server.enums.TaskStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -60,8 +60,8 @@ public class Task {
     protected void onUpdate() {
         this.updatedAt = LocalDateTime.now();
     }
-    public TaskDto toDto() {
-        return TaskDto.builder()
+    public TaskResponse toResponse() {
+        return TaskResponse.builder()
                 .id(this.id)
                 .domainId(this.domain != null ? this.domain.getId() : null)
                 .title(this.title)

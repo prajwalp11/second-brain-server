@@ -10,7 +10,7 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @Data
 @Builder
-public class TimeSeriesPointDto {
+public class TimeSeriesPointResponse {
     private LocalDate date;
     private Double value;
 }

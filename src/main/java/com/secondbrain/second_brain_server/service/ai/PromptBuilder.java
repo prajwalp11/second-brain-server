@@ -1,7 +1,7 @@
 package com.secondbrain.second_brain_server.service.ai;
 
-import com.secondbrain.second_brain_server.dto.response.PersonalRecordDto;
-import com.secondbrain.second_brain_server.dto.response.WeeklyStatDto;
+import com.secondbrain.second_brain_server.dto.response.PersonalRecordResponse;
+import com.secondbrain.second_brain_server.dto.response.WeeklyStatResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.entities.SessionLog;
 import com.secondbrain.second_brain_server.enums.DomainType;
@@ -71,7 +71,7 @@ public class PromptBuilder {
         return prompt.toString();
     }
 
-    public String sessionInsight(SessionLog log, List<SessionLog> recentLogs, List<PersonalRecordDto> prs) {
+    public String sessionInsight(SessionLog log, List<SessionLog> recentLogs, List<PersonalRecordResponse> prs) {
         StringBuilder prompt = new StringBuilder();
         prompt.append("You are an AI assistant providing insights for a user's session logs in a personal growth app.\n");
         prompt.append("Analyze the provided session log and recent history to offer constructive feedback, highlight progress, or suggest areas for improvement.\n");
@@ -127,7 +127,11 @@ public class PromptBuilder {
         prompt.append("You are an AI assistant for a personal growth and habit tracking application called 'Second Brain'.\n");
         prompt.append("Your goal is to help the user manage their domains, tasks, and milestones. You can answer questions, provide suggestions, and help with planning.\n");
         prompt.append("You have access to the user's context:\n");
-        prompt.append(context.toPromptString()).append("\n"); // UserContext will format itself
+        prompt.append("Domains: ").append(context.getDomains().size()).append("\n");
+        prompt.append("Recent logs: ").append(context.getRecentLogs().size()).append("\n");
+        prompt.append("PRs: ").append(context.getPrs().size()).append("\n");
+        prompt.append("Milestones: ").append(context.getMilestones().size()).append("\n");
+        prompt.append("Pending tasks: ").append(context.getPendingTasks().size()).append("\n\n");
         prompt.append("If the user asks for an action (e.g., 'add a task', 'set a milestone', 'adjust my plan'), respond with a JSON object containing a proposed action. The output MUST be a valid JSON object with the following structure:\n");
         prompt.append("{\n");
         prompt.append("  \"reply\": \"string\",\n");
@@ -145,7 +149,7 @@ public class PromptBuilder {
         return prompt.toString();
     }
 
-    public String weeklyInsight(List<WeeklyStatDto> stats, List<PersonalRecordDto> prs) {
+    public String weeklyInsight(List<WeeklyStatResponse> stats, List<PersonalRecordResponse> prs) {
         StringBuilder prompt = new StringBuilder();
         prompt.append("You are an AI assistant providing a weekly review insight for a user in a personal growth app.\n");
         prompt.append("Analyze the provided weekly statistics and any new personal records to offer a summary of progress, highlight achievements, and suggest focus areas for the upcoming week.\n");

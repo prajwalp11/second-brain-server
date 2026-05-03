@@ -1,6 +1,6 @@
 package com.secondbrain.second_brain_server.services;
 
-import com.secondbrain.second_brain_server.dto.response.WeeklyStatDto;
+import com.secondbrain.second_brain_server.dto.response.WeeklyStatResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.entities.DomainMetricDefinition;
 import com.secondbrain.second_brain_server.exception.ResourceNotFoundException;
@@ -28,9 +28,9 @@ public class WeeklyStatService {
     private final DomainRepository domainRepository;
     private final DomainMetricDefinitionRepository metricDefinitionRepository;
 
-    public List<WeeklyStatDto> getWeeklyStats(UUID userId, LocalDate weekStart) {
+    public List<WeeklyStatResponse> getWeeklyStats(UUID userId, LocalDate weekStart) {
         List<Domain> domains = domainRepository.findByUserId(userId);
-        List<WeeklyStatDto> allWeeklyStats = new ArrayList<>();
+        List<WeeklyStatResponse> allWeeklyStats = new ArrayList<>();
 
         for (Domain domain : domains) {
             allWeeklyStats.addAll(getWeeklyStatsForDomain(domain, weekStart));
@@ -38,8 +38,8 @@ public class WeeklyStatService {
         return allWeeklyStats;
     }
 
-    public List<WeeklyStatDto> getWeeklyStatsForDomain(Domain domain, LocalDate weekStart) {
-        List<WeeklyStatDto> domainWeeklyStats = new ArrayList<>();
+    public List<WeeklyStatResponse> getWeeklyStatsForDomain(Domain domain, LocalDate weekStart) {
+        List<WeeklyStatResponse> domainWeeklyStats = new ArrayList<>();
         LocalDate weekEnd = DateUtil.getWeekEnd(weekStart);
 
         List<DomainMetricDefinition> metrics = metricDefinitionRepository.findByDomainIdOrderByDisplayOrder(domain.getId());
@@ -48,7 +48,7 @@ public class WeeklyStatService {
             Double aggregatedValue = aggregateMetric(domain.getId(), metric.getMetricKey(), weekStart, weekEnd);
             Double target = resolveTarget(domain, metric.getMetricKey()); // Placeholder for target resolution
 
-            domainWeeklyStats.add(WeeklyStatDto.builder()
+            domainWeeklyStats.add(WeeklyStatResponse.builder()
                     .domainId(domain.getId())
                     .domainName(domain.getCustomName() != null ? domain.getCustomName() : domain.getDomainType().name())
                     .metricKey(metric.getMetricKey())

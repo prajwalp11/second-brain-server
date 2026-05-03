@@ -11,13 +11,13 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class AiConversationDto {
+public class AiConversationResponse {
 
     private UUID id;
     private String preview;
     private LocalDateTime updatedAt;
 
-    public AiConversationDto(AiConversation conversation) {
+    public AiConversationResponse(AiConversation conversation) {
         this.id = conversation.getId();
         this.preview = conversation.getPreview();
         this.updatedAt = conversation.getUpdatedAt();

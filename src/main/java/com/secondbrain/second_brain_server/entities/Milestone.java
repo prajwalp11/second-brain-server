@@ -1,6 +1,6 @@
 package com.secondbrain.second_brain_server.entities;
 
-import com.secondbrain.second_brain_server.dto.response.MilestoneDto;
+import com.secondbrain.second_brain_server.dto.response.MilestoneResponse;
 import com.secondbrain.second_brain_server.enums.MilestoneStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -60,11 +60,11 @@ public class Milestone {
         this.updatedAt = LocalDateTime.now();
     }
 
-    public MilestoneDto toDto() {
+    public MilestoneResponse toResponse() {
         double progress = (targetValue != null && targetValue > 0 && currentValue != null)
                 ? Math.min(100.0, (currentValue / targetValue) * 100.0)
                 : 0.0;
-        return MilestoneDto.builder()
+        return MilestoneResponse.builder()
                 .id(this.id)
                 .label(this.label)
                 .metricKey(this.metricKey)

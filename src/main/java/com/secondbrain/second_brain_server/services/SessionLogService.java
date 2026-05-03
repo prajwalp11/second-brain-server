@@ -1,8 +1,8 @@
 package com.secondbrain.second_brain_server.services;
 
 import com.secondbrain.second_brain_server.dto.request.CreateSessionLogRequest;
-import com.secondbrain.second_brain_server.dto.response.PersonalRecordDto;
-import com.secondbrain.second_brain_server.dto.response.SessionLogDto;
+import com.secondbrain.second_brain_server.dto.response.PersonalRecordResponse;
+import com.secondbrain.second_brain_server.dto.response.SessionLogResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.entities.SessionLog;
 import com.secondbrain.second_brain_server.entities.SessionMetricValue;
@@ -37,7 +37,7 @@ public class SessionLogService {
     private final AiInsightService aiInsightService;
 
     @Transactional
-    public SessionLogDto createLog(UUID userId, CreateSessionLogRequest request) {
+    public SessionLogResponse createLog(UUID userId, CreateSessionLogRequest request) {
         Domain domain = domainService.assertOwnership(request.getDomainId(), userId);
         domainService.validateMetricKeys(request.getDomainId(), request.getMetrics().keySet());
 
@@ -57,7 +57,7 @@ public class SessionLogService {
         SessionLog savedLog = sessionLogRepository.save(newLog);
         persistMetricValues(savedLog, request.getMetrics());
 
-        List<PersonalRecordDto> newPrs = prService.checkAndUpdatePrs(savedLog, request.getMetrics());
+        List<PersonalRecordResponse> newPrs = prService.checkAndUpdatePrs(savedLog, request.getMetrics());
         milestoneService.updateProgress(domain.getId());
         domainService.updateStreakForDomain(domain, request.getLogDate());
 
@@ -66,18 +66,18 @@ public class SessionLogService {
         return buildDto(savedLog, newPrs);
     }
 
-    public Page<SessionLogDto> getLogsForDomain(UUID domainId, UUID userId, Pageable pageable) {
+    public Page<SessionLogResponse> getLogsForDomain(UUID domainId, UUID userId, Pageable pageable) {
         domainService.assertOwnership(domainId, userId);
         return sessionLogRepository.findByDomainIdOrderByLogDateDesc(domainId, pageable)
                 .map(log -> buildDto(log, new ArrayList<>())); // No new PRs on GET
     }
 
-    public Page<SessionLogDto> getLogsForUser(UUID userId, Pageable pageable) {
+    public Page<SessionLogResponse> getLogsForUser(UUID userId, Pageable pageable) {
         return sessionLogRepository.findByUserIdOrderByLogDateDesc(userId, pageable)
                 .map(log -> buildDto(log, new ArrayList<>())); // No new PRs on GET
     }
 
-    public SessionLogDto getLogById(UUID logId, UUID userId) {
+    public SessionLogResponse getLogById(UUID logId, UUID userId) {
         SessionLog log = sessionLogRepository.findById(logId)
                 .orElseThrow(() -> new ResourceNotFoundException("SessionLog", logId));
 
@@ -123,8 +123,8 @@ public class SessionLogService {
                 ));
     }
 
-    private SessionLogDto buildDto(SessionLog log, List<PersonalRecordDto> newPrs) {
-        SessionLogDto dto = log.toDto();
+    private SessionLogResponse buildDto(SessionLog log, List<PersonalRecordResponse> newPrs) {
+        SessionLogResponse dto = log.toResponse();
         dto.setMetrics(hydrateMetrics(log.getId()));
         dto.setNewPrs(newPrs);
         return dto;

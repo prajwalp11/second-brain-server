@@ -15,7 +15,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class DomainDto {
+public class DomainResponse {
 
     private UUID id;
     private DomainType domainType;
@@ -29,6 +29,6 @@ public class DomainDto {
     private Integer currentStreak;
     private Integer longestStreak;
     private LocalDate lastLogDate;
-    private List<MetricDefinitionDto> metrics;
-    private MilestoneDto nextMilestone;
+    private List<MetricDefinitionResponse> metrics;
+    private MilestoneResponse nextMilestone;
 }

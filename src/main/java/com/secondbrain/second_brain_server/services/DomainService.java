@@ -2,9 +2,9 @@ package com.secondbrain.second_brain_server.services;
 
 import com.secondbrain.second_brain_server.dto.request.CreateDomainRequest;
 import com.secondbrain.second_brain_server.dto.request.UpdateDomainRequest;
-import com.secondbrain.second_brain_server.dto.response.DomainDto;
-import com.secondbrain.second_brain_server.dto.response.GeneratedSystemDto;
-import com.secondbrain.second_brain_server.dto.response.TimeSeriesPointDto;
+import com.secondbrain.second_brain_server.dto.response.DomainResponse;
+import com.secondbrain.second_brain_server.dto.response.GeneratedSystemResponse;
+import com.secondbrain.second_brain_server.dto.response.TimeSeriesPointResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.entities.DomainMetricDefinition;
 import com.secondbrain.second_brain_server.entities.Milestone;
@@ -46,19 +46,19 @@ public class DomainService {
     private final TaskRepository taskRepository;
     private final AiSystemGeneratorService aiSystemGeneratorService;
 
-    public List<DomainDto> getDomainsForUser(UUID userId) {
+    public List<DomainResponse> getDomainsForUser(UUID userId) {
         return domainRepository.findByUserId(userId).stream()
-                .map(Domain::toDto)
+                .map(Domain::toResponse)
                 .collect(Collectors.toList());
     }
 
-    public DomainDto getDomainById(UUID domainId, UUID userId) {
+    public DomainResponse getDomainById(UUID domainId, UUID userId) {
         Domain domain = assertOwnership(domainId, userId);
-        return domain.toDto();
+        return domain.toResponse();
     }
 
     @Transactional
-    public DomainDto createDomain(UUID userId, CreateDomainRequest request) {
+    public DomainResponse createDomain(UUID userId, CreateDomainRequest request) {
         if (domainRepository.existsByUserIdAndDomainType(userId, request.getDomainType())) {
             throw new DomainAlreadyExistsException(request.getDomainType());
         }
@@ -79,15 +79,15 @@ public class DomainService {
         Domain savedDomain = domainRepository.save(newDomain);
 
         // Generate and apply AI system
-        GeneratedSystemDto generatedSystem = aiSystemGeneratorService.generateSystem(
+        GeneratedSystemResponse generatedSystem = aiSystemGeneratorService.generateSystem(
                 request.getDomainType(), request.getSkillLevel(), request.getLinkedResourceUrl());
         applyGeneratedSystem(savedDomain, generatedSystem);
 
-        return savedDomain.toDto();
+        return savedDomain.toResponse();
     }
 
     @Transactional
-    public DomainDto updateDomain(UUID domainId, UUID userId, UpdateDomainRequest request) {
+    public DomainResponse updateDomain(UUID domainId, UUID userId, UpdateDomainRequest request) {
         Domain domain = assertOwnership(domainId, userId);
 
         Optional.ofNullable(request.getCustomName()).ifPresent(domain::setCustomName);
@@ -98,7 +98,7 @@ public class DomainService {
         Optional.ofNullable(request.getStatus()).ifPresent(domain::setStatus);
         domain.setUpdatedAt(LocalDateTime.now());
 
-        return domainRepository.save(domain).toDto();
+        return domainRepository.save(domain).toResponse();
     }
 
     @Transactional
@@ -118,9 +118,9 @@ public class DomainService {
     }
 
     @Transactional
-    public GeneratedSystemDto generateAndApplySystem(UUID domainId, UUID userId) {
+    public GeneratedSystemResponse generateAndApplySystem(UUID domainId, UUID userId) {
         Domain domain = assertOwnership(domainId, userId);
-        GeneratedSystemDto generatedSystem = aiSystemGeneratorService.regenerateSystem(domain);
+        GeneratedSystemResponse generatedSystem = aiSystemGeneratorService.regenerateSystem(domain);
         applyGeneratedSystem(domain, generatedSystem);
         return generatedSystem;
     }
@@ -151,7 +151,7 @@ public class DomainService {
         MetricValidator.validateKeys(submittedKeys, definedMetrics);
     }
 
-    private void applyGeneratedSystem(Domain domain, GeneratedSystemDto generated) {
+    private void applyGeneratedSystem(Domain domain, GeneratedSystemResponse generated) {
         // Update domain details
         Optional.ofNullable(generated.getPlanDescription()).ifPresent(domain::setPlanDescription);
         Optional.ofNullable(generated.getWeeklySchedule()).ifPresent(domain::setWeeklySchedule);
@@ -224,7 +224,7 @@ public class DomainService {
                 .orElseThrow(() -> new ResourceNotFoundException("Domain", domainId))
                 .checkOwnership(userId);
     }
-    public List<TimeSeriesPointDto> getChartData(UUID domainId, UUID userId, int days) {
+    public List<TimeSeriesPointResponse> getChartData(UUID domainId, UUID userId, int days) {
         Domain domain = assertOwnership(domainId, userId);
         LocalDate endDate = LocalDate.now();
         LocalDate startDate = endDate.minusDays(days - 1);
@@ -240,7 +240,7 @@ public class DomainService {
                         )
                 ))
                 .entrySet().stream()
-                .map(entry -> new TimeSeriesPointDto(entry.getKey(), entry.getValue()))
+                .map(entry -> new TimeSeriesPointResponse(entry.getKey(), entry.getValue()))
                 .sorted((a, b) -> a.getDate().compareTo(b.getDate()))
                 .collect(Collectors.toList());
     }

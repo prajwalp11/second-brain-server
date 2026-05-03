@@ -1,6 +1,6 @@
 package com.secondbrain.second_brain_server.service.ai;
 
-import com.secondbrain.second_brain_server.dto.response.AiNudgeDto;
+import com.secondbrain.second_brain_server.dto.response.AiNudgeResponse;
 import com.secondbrain.second_brain_server.entities.AiNudge;
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.entities.SessionLog;
@@ -79,9 +79,9 @@ public class AiNudgeService {
         }
     }
 
-    public Optional<AiNudgeDto> getUnreadNudge(UUID userId) {
+    public Optional<AiNudgeResponse> getUnreadNudge(UUID userId) {
         return aiNudgeRepository.findFirstByUserIdAndIsReadFalseOrderByGeneratedAtDesc(userId)
-                .map(AiNudge::toDto); // Assuming AiNudge has a toResponse method
+                .map(AiNudge::toResponse); // Assuming AiNudge has a toResponse method
     }
 
     @Transactional

@@ -1,12 +1,12 @@
 package com.secondbrain.second_brain_server.service.ai;
 
-import com.secondbrain.second_brain_server.dto.response.DomainDto;
-import com.secondbrain.second_brain_server.dto.response.MilestoneDto;
-import com.secondbrain.second_brain_server.dto.response.PersonalRecordDto;
-import com.secondbrain.second_brain_server.dto.response.SessionLogDto;
-import com.secondbrain.second_brain_server.dto.response.StreakDto;
-import com.secondbrain.second_brain_server.dto.response.TaskDto;
-import com.secondbrain.second_brain_server.dto.response.WeeklyStatDto;
+import com.secondbrain.second_brain_server.dto.response.DomainResponse;
+import com.secondbrain.second_brain_server.dto.response.MilestoneResponse;
+import com.secondbrain.second_brain_server.dto.response.PersonalRecordResponse;
+import com.secondbrain.second_brain_server.dto.response.SessionLogResponse;
+import com.secondbrain.second_brain_server.dto.response.StreakResponse;
+import com.secondbrain.second_brain_server.dto.response.TaskResponse;
+import com.secondbrain.second_brain_server.dto.response.WeeklyStatResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.entities.Milestone;
 import com.secondbrain.second_brain_server.entities.PersonalRecord;
@@ -49,18 +49,18 @@ public class UserContextAssembler {
     public UserContext assemble(UUID userId) {
         // Domains
         List<Domain> domains = domainRepository.findByUserId(userId);
-        List<DomainDto> domainDtos = domains.stream()
-                .map(Domain::toDto)
+        List<DomainResponse> domainDtos = domains.stream()
+                .map(Domain::toResponse)
                 .collect(Collectors.toList());
 
         // Recent logs (last 30) with hydrated metrics
         Pageable pageable = PageRequest.of(0, 30);
-        List<SessionLogDto> recentLogDtos = sessionLogRepository
+        List<SessionLogResponse> recentLogDtos = sessionLogRepository
                 .findByUserIdOrderByLogDateDesc(userId, pageable)
                 .getContent()
                 .stream()
                 .map(log -> {
-                    SessionLogDto dto = log.toDto();
+                    SessionLogResponse dto = log.toResponse();
                     dto.setMetrics(sessionMetricValueRepository
                             .findBySessionLogId(log.getId())
                             .stream()
@@ -73,9 +73,9 @@ public class UserContextAssembler {
                 .collect(Collectors.toList());
 
         // Personal records
-        List<PersonalRecordDto> prs = prRepository.findByUserId(userId)
+        List<PersonalRecordResponse> prs = prRepository.findByUserId(userId)
                 .stream()
-                .map(PersonalRecord::toDto)
+                .map(PersonalRecord::toResponse)
                 .collect(Collectors.toList());
 
         // Milestones — fetch across all user's domains, not a single null domainId
@@ -83,22 +83,22 @@ public class UserContextAssembler {
                 .map(Domain::getId)
                 .collect(Collectors.toList());
 
-        List<MilestoneDto> milestones = milestoneRepository
+        List<MilestoneResponse> milestones = milestoneRepository
                 .findByDomainIdInAndStatus(domainIds, MilestoneStatus.IN_PROGRESS)
                 .stream()
-                .map(Milestone::toDto)
+                .map(Milestone::toResponse)
                 .collect(Collectors.toList());
 
         // Pending tasks
-        List<TaskDto> pendingTasks = taskRepository
+        List<TaskResponse> pendingTasks = taskRepository
                 .findByUserIdAndStatusIn(userId, Arrays.asList(TaskStatus.TODO, TaskStatus.IN_PROGRESS))
                 .stream()
-                .map(Task::toDto)
+                .map(Task::toResponse)
                 .collect(Collectors.toList());
 
         // Streaks — read directly from Domain entity (already maintained by StreakService)
-        Map<UUID, StreakDto> streaks = new HashMap<>();
-        domains.forEach(domain -> streaks.put(domain.getId(), StreakDto.builder()
+        Map<UUID, StreakResponse> streaks = new HashMap<>();
+        domains.forEach(domain -> streaks.put(domain.getId(), StreakResponse.builder()
                 .domainId(domain.getId())
                 .domainName(domain.getCustomName() != null
                         ? domain.getCustomName()
@@ -110,7 +110,7 @@ public class UserContextAssembler {
 
         // Weekly stats for current week
         LocalDate weekStart = DateUtil.getWeekStart(LocalDate.now());
-        List<WeeklyStatDto> weeklyStats = new ArrayList<>();
+        List<WeeklyStatResponse> weeklyStats = new ArrayList<>();
         for (Domain domain : domains) {
             weeklyStats.addAll(weeklyStatService.getWeeklyStatsForDomain(domain, weekStart));
         }
@@ -138,32 +138,32 @@ public class UserContextAssembler {
         // Should query directly by domainId for each repo call to avoid over-fetching.
         UserContext fullContext = assemble(userId);
 
-        List<DomainDto> domainSpecific = fullContext.getDomains().stream()
+        List<DomainResponse> domainSpecific = fullContext.getDomains().stream()
                 .filter(d -> d.getId().equals(domainId))
                 .collect(Collectors.toList());
 
-        List<SessionLogDto> logsSpecific = fullContext.getRecentLogs().stream()
+        List<SessionLogResponse> logsSpecific = fullContext.getRecentLogs().stream()
                 .filter(sl -> sl.getDomainId().equals(domainId))
                 .collect(Collectors.toList());
 
-        List<PersonalRecordDto> prsSpecific = fullContext.getPrs().stream()
+        List<PersonalRecordResponse> prsSpecific = fullContext.getPrs().stream()
                 .filter(pr -> pr.getDomainId() != null && pr.getDomainId().equals(domainId))
                 .collect(Collectors.toList());
 
-        List<MilestoneDto> milestonesSpecific = fullContext.getMilestones().stream()
+        List<MilestoneResponse> milestonesSpecific = fullContext.getMilestones().stream()
                 .filter(m -> m.getDomainId() != null && m.getDomainId().equals(domainId))
                 .collect(Collectors.toList());
 
-        List<TaskDto> tasksSpecific = fullContext.getPendingTasks().stream()
+        List<TaskResponse> tasksSpecific = fullContext.getPendingTasks().stream()
                 .filter(t -> t.getDomainId() != null && t.getDomainId().equals(domainId))
                 .collect(Collectors.toList());
 
-        Map<UUID, StreakDto> streaksSpecific = new HashMap<>();
+        Map<UUID, StreakResponse> streaksSpecific = new HashMap<>();
         if (fullContext.getStreaks().containsKey(domainId)) {
             streaksSpecific.put(domainId, fullContext.getStreaks().get(domainId));
         }
 
-        List<WeeklyStatDto> weeklyStatsSpecific = fullContext.getWeeklyStats().stream()
+        List<WeeklyStatResponse> weeklyStatsSpecific = fullContext.getWeeklyStats().stream()
                 .filter(ws -> ws.getDomainId() != null && ws.getDomainId().equals(domainId))
                 .collect(Collectors.toList());
 

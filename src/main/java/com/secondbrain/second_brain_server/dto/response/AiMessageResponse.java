@@ -12,14 +12,14 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class AiMessageDto {
+public class AiMessageResponse {
 
     private UUID id;
     private MessageRole role;
     private String content;
     private LocalDateTime createdAt;
 
-    public AiMessageDto(AiMessage message) {
+    public AiMessageResponse(AiMessage message) {
         this.id = message.getId();
         this.role = message.getRole();
         this.content = message.getContent();

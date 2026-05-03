@@ -1,6 +1,6 @@
 package com.secondbrain.second_brain_server.entities;
 
-import com.secondbrain.second_brain_server.dto.response.AiNudgeDto;
+import com.secondbrain.second_brain_server.dto.response.AiNudgeResponse;
 import com.secondbrain.second_brain_server.enums.NudgeType;
 import jakarta.persistence.*;
 import lombok.*;
@@ -41,8 +41,8 @@ public class AiNudge {
 
     private LocalDateTime readAt;
 
-    public AiNudgeDto toDto() {
-        return AiNudgeDto.builder()
+    public AiNudgeResponse toResponse() {
+        return AiNudgeResponse.builder()
                 .id(this.id)
                 .message(this.message)
                 .nudgeType(this.nudgeType)

@@ -1,7 +1,7 @@
 package com.secondbrain.second_brain_server.controllers;
 
 import com.secondbrain.second_brain_server.dto.request.CreateSessionLogRequest;
-import com.secondbrain.second_brain_server.dto.response.SessionLogDto;
+import com.secondbrain.second_brain_server.dto.response.SessionLogResponse;
 import com.secondbrain.second_brain_server.security.CurrentUser;
 import com.secondbrain.second_brain_server.services.SessionLogService;
 import lombok.RequiredArgsConstructor;
@@ -20,12 +20,12 @@ public class SessionLogController {
     private final SessionLogService sessionLogService;
 
     @PostMapping
-    public ResponseEntity<SessionLogDto> createLog(@RequestBody CreateSessionLogRequest request, @CurrentUser UUID userId) {
+    public ResponseEntity<SessionLogResponse> createLog(@RequestBody CreateSessionLogRequest request, @CurrentUser UUID userId) {
         return ResponseEntity.ok(sessionLogService.createLog(userId, request));
     }
 
     @GetMapping
-    public ResponseEntity<Page<SessionLogDto>> getLogs(@RequestParam(required = false) UUID domainId,
+    public ResponseEntity<Page<SessionLogResponse>> getLogs(@RequestParam(required = false) UUID domainId,
                                                        Pageable pageable,
                                                        @CurrentUser UUID userId) {
         if (domainId != null) {
@@ -35,7 +35,7 @@ public class SessionLogController {
     }
 
     @GetMapping("/{logId}")
-    public ResponseEntity<SessionLogDto> getLog(@PathVariable UUID logId, @CurrentUser UUID userId) {
+    public ResponseEntity<SessionLogResponse> getLog(@PathVariable UUID logId, @CurrentUser UUID userId) {
         return ResponseEntity.ok(sessionLogService.getLogById(logId, userId));
     }
 

@@ -14,5 +14,5 @@ public class AiChatResponse {
 
     private String reply;
     private UUID conversationId;
-    private List<AiActionDto> proposedActions;
+    private List<AiActionResponse> proposedActions;
 }

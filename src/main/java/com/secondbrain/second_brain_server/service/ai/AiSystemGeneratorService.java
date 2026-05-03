@@ -2,7 +2,7 @@ package com.secondbrain.second_brain_server.service.ai;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.secondbrain.second_brain_server.dto.response.GeneratedSystemDto;
+import com.secondbrain.second_brain_server.dto.response.GeneratedSystemResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.enums.DomainType;
 import com.secondbrain.second_brain_server.enums.SkillLevel;
@@ -25,7 +25,7 @@ public class AiSystemGeneratorService {
     private final PromptBuilder promptBuilder;
     private final ObjectMapper objectMapper;
 
-    public GeneratedSystemDto generateSystem(DomainType type, SkillLevel level, String linkedUrl) {
+    public GeneratedSystemResponse generateSystem(DomainType type, SkillLevel level, String linkedUrl) {
         try {
             String systemPrompt = promptBuilder.systemGenerator(type, level, linkedUrl);
             List<GeminiMessage> messages = List.of(new GeminiMessage("user", List.of(Map.of("text", "Generate the system now."))));
@@ -37,7 +37,7 @@ public class AiSystemGeneratorService {
         }
     }
 
-    public GeneratedSystemDto regenerateSystem(Domain domain) {
+    public GeneratedSystemResponse regenerateSystem(Domain domain) {
         try {
             String systemPrompt = promptBuilder.systemGenerator(domain.getDomainType(), domain.getSkillLevel(), domain.getLinkedResourceUrl());
             List<GeminiMessage> messages = List.of(new GeminiMessage("user", List.of(Map.of("text", "Regenerate the system based on the current domain details."))));
@@ -49,8 +49,8 @@ public class AiSystemGeneratorService {
         }
     }
 
-    private GeneratedSystemDto createFallbackSystem(DomainType type, SkillLevel level, String linkedUrl) {
-        return GeneratedSystemDto.builder()
+    private GeneratedSystemResponse createFallbackSystem(DomainType type, SkillLevel level, String linkedUrl) {
+        return GeneratedSystemResponse.builder()
                 .planDescription("Welcome to your " + type.name().toLowerCase() + " journey! Start by setting a consistent schedule and tracking your progress.")
                 .weeklySchedule("Mon,Tue,Wed,Thu,Fri,Sat,Sun")
                 .linkedResourceUrl(linkedUrl)
@@ -61,9 +61,9 @@ public class AiSystemGeneratorService {
                 .build();
     }
 
-    private GeneratedSystemDto parseResponse(String raw) {
+    private GeneratedSystemResponse parseResponse(String raw) {
         try {
-            return objectMapper.readValue(raw, GeneratedSystemDto.class);
+            return objectMapper.readValue(raw, GeneratedSystemResponse.class);
         } catch (JsonProcessingException e) {
             log.error("Failed to parse AI system generation response: {}", raw, e);
             throw new AiServiceException("Failed to parse AI system generation response", e);

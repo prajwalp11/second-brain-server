@@ -9,7 +9,7 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class AiActionDto {
+public class AiActionResponse {
 
     private String type;
     private String description;

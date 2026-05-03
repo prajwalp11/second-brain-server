@@ -9,13 +9,14 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class WeeklyStatDto {
+public class MetricDefinitionResponse {
 
-    private UUID domainId;
-    private String domainName;
+    private UUID id;
     private String metricKey;
     private String label;
-    private Double value;
-    private Double target;
     private String unit;
+    private boolean isTrackedPerSession;
+    private boolean isPR;
+    private boolean isHigherBetter;
+    private Integer displayOrder;
 }

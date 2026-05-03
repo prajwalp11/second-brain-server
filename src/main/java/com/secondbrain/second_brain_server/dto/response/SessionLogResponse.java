@@ -14,7 +14,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class SessionLogDto {
+public class SessionLogResponse {
 
     private UUID id;
     private UUID domainId;
@@ -27,5 +27,5 @@ public class SessionLogDto {
     private String linkedReferenceUrl;
     private Map<String, Double> metrics;
     private String aiInsight;
-    private List<PersonalRecordDto> newPrs;
+    private List<PersonalRecordResponse> newPrs;
 }

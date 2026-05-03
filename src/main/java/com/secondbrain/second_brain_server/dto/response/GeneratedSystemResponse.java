@@ -9,13 +9,13 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class GeneratedSystemDto {
+public class GeneratedSystemResponse {
 
     private String planDescription;
     private String weeklySchedule;
-    private List<MetricDefinitionDto> metrics;
-    private List<MilestoneDto> milestones;
+    private List<MetricDefinitionResponse> metrics;
+    private List<MilestoneResponse> milestones;
     private String linkedResourceUrl;
     private String linkedResourceTitle;
-    private List<TaskDto> tasks;
+    private List<TaskResponse> tasks;
 }

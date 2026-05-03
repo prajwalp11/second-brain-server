@@ -13,7 +13,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class MilestoneDto {
+public class MilestoneResponse {
 
     private UUID id;
     private UUID domainId;

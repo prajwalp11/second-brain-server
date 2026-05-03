@@ -2,9 +2,9 @@ package com.secondbrain.second_brain_server.controllers;
 
 import com.secondbrain.second_brain_server.dto.request.CreateDomainRequest;
 import com.secondbrain.second_brain_server.dto.request.UpdateDomainRequest;
-import com.secondbrain.second_brain_server.dto.response.DomainDto;
-import com.secondbrain.second_brain_server.dto.response.GeneratedSystemDto;
-import com.secondbrain.second_brain_server.dto.response.TimeSeriesPointDto;
+import com.secondbrain.second_brain_server.dto.response.DomainResponse;
+import com.secondbrain.second_brain_server.dto.response.GeneratedSystemResponse;
+import com.secondbrain.second_brain_server.dto.response.TimeSeriesPointResponse;
 import com.secondbrain.second_brain_server.security.CurrentUser;
 import com.secondbrain.second_brain_server.services.DomainService;
 import lombok.RequiredArgsConstructor;
@@ -22,17 +22,17 @@ public class DomainController {
     private final DomainService domainService;
 
     @GetMapping
-    public ResponseEntity<List<DomainDto>> getDomains(@CurrentUser UUID userId) {
+    public ResponseEntity<List<DomainResponse>> getDomains(@CurrentUser UUID userId) {
         return ResponseEntity.ok(domainService.getDomainsForUser(userId));
     }
 
     @GetMapping("/{domainId}")
-    public ResponseEntity<DomainDto> getDomain(@PathVariable UUID domainId, @CurrentUser UUID userId) {
+    public ResponseEntity<DomainResponse> getDomain(@PathVariable UUID domainId, @CurrentUser UUID userId) {
         return ResponseEntity.ok(domainService.getDomainById(domainId, userId));
     }
 
     @GetMapping("/{domainId}/chart-data")
-    public ResponseEntity<List<TimeSeriesPointDto>> getChartData(
+    public ResponseEntity<List<TimeSeriesPointResponse>> getChartData(
             @PathVariable UUID domainId,
             @RequestParam(defaultValue = "30") int days,
             @CurrentUser UUID userId) {
@@ -40,12 +40,12 @@ public class DomainController {
     }
 
     @PostMapping
-    public ResponseEntity<DomainDto> createDomain(@RequestBody CreateDomainRequest request, @CurrentUser UUID userId) {
+    public ResponseEntity<DomainResponse> createDomain(@RequestBody CreateDomainRequest request, @CurrentUser UUID userId) {
         return ResponseEntity.ok(domainService.createDomain(userId, request));
     }
 
     @PutMapping("/{domainId}")
-    public ResponseEntity<DomainDto> updateDomain(@PathVariable UUID domainId, @RequestBody UpdateDomainRequest request, @CurrentUser UUID userId) {
+    public ResponseEntity<DomainResponse> updateDomain(@PathVariable UUID domainId, @RequestBody UpdateDomainRequest request, @CurrentUser UUID userId) {
         return ResponseEntity.ok(domainService.updateDomain(domainId, userId, request));
     }
 
@@ -62,7 +62,7 @@ public class DomainController {
     }
 
     @PostMapping("/{domainId}/generate-system")
-    public ResponseEntity<GeneratedSystemDto> generateSystem(@PathVariable UUID domainId, @CurrentUser UUID userId) {
+    public ResponseEntity<GeneratedSystemResponse> generateSystem(@PathVariable UUID domainId, @CurrentUser UUID userId) {
         return ResponseEntity.ok(domainService.generateAndApplySystem(domainId, userId));
     }
 }

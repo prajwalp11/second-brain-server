@@ -1,6 +1,6 @@
 package com.secondbrain.second_brain_server.entities;
 
-import com.secondbrain.second_brain_server.dto.response.MetricDefinitionDto;
+import com.secondbrain.second_brain_server.dto.response.MetricDefinitionResponse;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -54,8 +54,8 @@ public class DomainMetricDefinition {
         this.updatedAt = LocalDateTime.now();
     }
 
-    public MetricDefinitionDto toDto() {
-        return MetricDefinitionDto.builder()
+    public MetricDefinitionResponse toResponse() {
+        return MetricDefinitionResponse.builder()
                 .id(this.id)
                 .metricKey(this.metricKey)
                 .label(this.label)

@@ -12,7 +12,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class TaskDto {
+public class TaskResponse {
 
     private UUID id;
     private UUID domainId;
@@ -24,7 +24,7 @@ public class TaskDto {
     private boolean aiGenerated;
     private Long daysRemaining;
 
-    public TaskDto(Task task) {
+    public TaskResponse(Task task) {
         this.id = task.getId();
         this.domainId = task.getDomain() != null ? task.getDomain().getId() : null;
         this.title = task.getTitle();
