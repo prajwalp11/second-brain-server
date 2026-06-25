@@ -3,15 +3,14 @@ package com.secondbrain.second_brain_server.controllers;
 import com.secondbrain.second_brain_server.dto.request.LoginRequest;
 import com.secondbrain.second_brain_server.dto.request.RegisterRequest;
 import com.secondbrain.second_brain_server.dto.response.AuthResponse;
+import com.secondbrain.second_brain_server.security.CurrentUser;
 import com.secondbrain.second_brain_server.services.AuthService;
-import io.jsonwebtoken.Jwt;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
 
 @RestController
 @Slf4j
@@ -32,8 +31,8 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout() {
-        // Placeholder for logout logic, userId will be resolved by CurrentUserArgumentResolver
+    public ResponseEntity<Void> logout(@CurrentUser UUID userId) {
+        authService.logout(userId);
         return ResponseEntity.ok().build();
     }
 }

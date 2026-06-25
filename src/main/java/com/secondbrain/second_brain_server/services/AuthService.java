@@ -72,13 +72,10 @@ public class AuthService {
     }
 
 
+    @Transactional
     public void logout(UUID userId) {
-        // For a stateless JWT system, server-side logout typically means doing nothing
-        // as the client is responsible for discarding the token.
-        // If token invalidation (blacklisting) is required, it would be implemented here.
+        log.info("User {} logged out", userId);
     }
-
-    
 
     private AuthResponse buildAuthResponse(User user) {
         String accessToken = jwtUtil.generateAccessToken(user);
