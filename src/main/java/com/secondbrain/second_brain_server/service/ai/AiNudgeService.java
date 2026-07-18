@@ -126,7 +126,7 @@ public class AiNudgeService {
     }
 
     private boolean alreadySentToday(UUID userId, UUID domainId) {
-        LocalDateTime startOfDay = LocalDateTime.now();
+        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
         return aiNudgeRepository.existsByUserIdAndDomainIdAndGeneratedAtAfter(userId, domainId, startOfDay);
     }
 }
