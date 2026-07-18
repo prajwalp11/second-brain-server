@@ -41,7 +41,6 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-@Slf4j
 public class AiChatService {
 
     private final GeminiClient geminiClient;

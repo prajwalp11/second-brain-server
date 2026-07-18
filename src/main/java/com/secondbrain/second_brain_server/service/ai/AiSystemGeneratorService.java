@@ -20,7 +20,6 @@ import java.util.Map;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-@Slf4j
 public class AiSystemGeneratorService {
 
     private final GeminiClient geminiClient;
