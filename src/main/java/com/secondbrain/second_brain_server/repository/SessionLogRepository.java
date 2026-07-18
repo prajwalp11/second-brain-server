@@ -16,6 +16,9 @@ public interface SessionLogRepository extends JpaRepository<SessionLog, UUID> {
     Page<SessionLog> findByUserIdOrderByLogDateDesc(UUID userId, Pageable pageable);
     Page<SessionLog> findByDomainIdOrderByLogDateDesc(UUID domainId, Pageable pageable);
     List<SessionLog> findByDomainIdAndLogDateBetween(UUID domainId, LocalDate from, LocalDate to);
+
+    @Query("SELECT sl FROM SessionLog sl LEFT JOIN FETCH sl.metricValues WHERE sl.domain.id = :domainId AND sl.logDate BETWEEN :from AND :to")
+    List<SessionLog> findByDomainIdAndLogDateBetweenWithMetrics(UUID domainId, LocalDate from, LocalDate to);
     List<SessionLog> findTopNByDomainIdOrderByLogDateDesc(UUID domainId, Pageable pageable);
     @Query("SELECT sl.logDate FROM SessionLog sl WHERE sl.domain.id = :domainId")
     List<LocalDate> findLogDatesByDomainId(UUID domainId);

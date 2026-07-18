@@ -8,6 +8,7 @@ import com.secondbrain.second_brain_server.dto.response.TimeSeriesPointResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.entities.DomainMetricDefinition;
 import com.secondbrain.second_brain_server.entities.Milestone;
+import com.secondbrain.second_brain_server.entities.SessionLog;
 import com.secondbrain.second_brain_server.entities.Task;
 import com.secondbrain.second_brain_server.enums.DomainStatus;
 import com.secondbrain.second_brain_server.enums.DomainType;
@@ -21,6 +22,7 @@ import com.secondbrain.second_brain_server.exception.ValidationException;
 import com.secondbrain.second_brain_server.repository.DomainMetricDefinitionRepository;
 import com.secondbrain.second_brain_server.repository.DomainRepository;
 import com.secondbrain.second_brain_server.repository.MilestoneRepository;
+import com.secondbrain.second_brain_server.repository.SessionLogRepository;
 import com.secondbrain.second_brain_server.repository.TaskRepository;
 import com.secondbrain.second_brain_server.service.ai.AiSystemGeneratorService;
 import com.secondbrain.second_brain_server.util.MetricValidator;
@@ -45,6 +47,7 @@ public class DomainService {
     private final DomainRepository domainRepository;
     private final DomainMetricDefinitionRepository metricDefinitionRepository;
     private final MilestoneRepository milestoneRepository;
+    private final SessionLogRepository sessionLogRepository;
     private final TaskRepository taskRepository;
     private final AiSystemGeneratorService aiSystemGeneratorService;
 
@@ -229,15 +232,16 @@ public class DomainService {
     }
     @Transactional(readOnly = true)
     public List<TimeSeriesPointResponse> getChartData(UUID domainId, UUID userId, int days) {
-        Domain domain = assertOwnership(domainId, userId);
+        assertOwnership(domainId, userId);
         LocalDate endDate = LocalDate.now();
         LocalDate startDate = endDate.minusDays(days - 1);
-        
-        return domain.getSessionLogs().stream()
-                .filter(log -> !log.getLogDate().isBefore(startDate) && !log.getLogDate().isAfter(endDate))
+
+        List<SessionLog> logs = sessionLogRepository.findByDomainIdAndLogDateBetweenWithMetrics(domainId, startDate, endDate);
+
+        return logs.stream()
                 .collect(Collectors.groupingBy(
-                        log -> log.getLogDate(),
-                        Collectors.summingDouble(log -> 
+                        SessionLog::getLogDate,
+                        Collectors.summingDouble(log ->
                                 log.getMetricValues().stream()
                                         .mapToDouble(mv -> mv.getNumericValue() != null ? mv.getNumericValue() : 0.0)
                                         .sum()
