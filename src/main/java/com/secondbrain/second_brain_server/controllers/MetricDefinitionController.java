@@ -7,6 +7,7 @@ import com.secondbrain.second_brain_server.services.MetricDefinitionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -26,7 +27,7 @@ public class MetricDefinitionController {
     }
 
     @PostMapping
-    public ResponseEntity<MetricDefinitionResponse> createMetric(@RequestBody CreateMetricDefinitionRequest request, @CurrentUser UUID userId) {
+    public ResponseEntity<MetricDefinitionResponse> createMetric(@Valid @RequestBody CreateMetricDefinitionRequest request, @CurrentUser UUID userId) {
         return ResponseEntity.ok(metricDefinitionService.createMetric(request, userId));
     }
 

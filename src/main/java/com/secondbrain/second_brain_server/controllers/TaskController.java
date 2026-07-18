@@ -9,6 +9,7 @@ import com.secondbrain.second_brain_server.services.TaskService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -35,12 +36,12 @@ public class TaskController {
     }
 
     @PostMapping
-    public ResponseEntity<TaskResponse> createTask(@RequestBody CreateTaskRequest request, @CurrentUser UUID userId) {
+    public ResponseEntity<TaskResponse> createTask(@Valid @RequestBody CreateTaskRequest request, @CurrentUser UUID userId) {
         return ResponseEntity.ok(taskService.createTask(userId, request));
     }
 
     @PutMapping("/{taskId}")
-    public ResponseEntity<TaskResponse> updateTask(@PathVariable UUID taskId, @RequestBody UpdateTaskStatusRequest request, @CurrentUser UUID userId) {
+    public ResponseEntity<TaskResponse> updateTask(@PathVariable UUID taskId, @Valid @RequestBody UpdateTaskStatusRequest request, @CurrentUser UUID userId) {
         return ResponseEntity.ok(taskService.updateTaskStatus(taskId, userId, request));
     }
 

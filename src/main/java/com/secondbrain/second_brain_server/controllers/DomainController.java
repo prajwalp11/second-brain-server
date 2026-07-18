@@ -10,6 +10,7 @@ import com.secondbrain.second_brain_server.services.DomainService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -42,12 +43,12 @@ public class DomainController {
     }
 
     @PostMapping
-    public ResponseEntity<DomainResponse> createDomain(@RequestBody CreateDomainRequest request, @CurrentUser UUID userId) {
+    public ResponseEntity<DomainResponse> createDomain(@Valid @RequestBody CreateDomainRequest request, @CurrentUser UUID userId) {
         return ResponseEntity.ok(domainService.createDomain(userId, request));
     }
 
     @PutMapping("/{domainId}")
-    public ResponseEntity<DomainResponse> updateDomain(@PathVariable UUID domainId, @RequestBody UpdateDomainRequest request, @CurrentUser UUID userId) {
+    public ResponseEntity<DomainResponse> updateDomain(@PathVariable UUID domainId, @Valid @RequestBody UpdateDomainRequest request, @CurrentUser UUID userId) {
         return ResponseEntity.ok(domainService.updateDomain(domainId, userId, request));
     }
 

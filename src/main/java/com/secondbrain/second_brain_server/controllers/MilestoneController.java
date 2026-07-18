@@ -8,6 +8,7 @@ import com.secondbrain.second_brain_server.services.MilestoneService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -27,7 +28,7 @@ public class MilestoneController {
     }
 
     @PostMapping
-    public ResponseEntity<MilestoneResponse> createMilestone(@RequestBody CreateMilestoneRequest request, @CurrentUser UUID userId) {
+    public ResponseEntity<MilestoneResponse> createMilestone(@Valid @RequestBody CreateMilestoneRequest request, @CurrentUser UUID userId) {
         return ResponseEntity.ok(milestoneService.createMilestone(userId, request));
     }
 

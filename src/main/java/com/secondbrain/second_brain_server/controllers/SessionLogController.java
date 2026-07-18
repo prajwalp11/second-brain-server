@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -22,7 +23,7 @@ public class SessionLogController {
     private final SessionLogService sessionLogService;
 
     @PostMapping
-    public ResponseEntity<SessionLogResponse> createLog(@RequestBody CreateSessionLogRequest request, @CurrentUser UUID userId) {
+    public ResponseEntity<SessionLogResponse> createLog(@Valid @RequestBody CreateSessionLogRequest request, @CurrentUser UUID userId) {
         return ResponseEntity.ok(sessionLogService.createLog(userId, request));
     }
 

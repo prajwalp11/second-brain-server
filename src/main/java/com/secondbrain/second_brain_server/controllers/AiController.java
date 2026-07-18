@@ -12,6 +12,7 @@ import com.secondbrain.second_brain_server.service.ai.AiNudgeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -27,7 +28,7 @@ public class AiController {
     private final AiNudgeService aiNudgeService;
 
     @PostMapping("/chat")
-    public ResponseEntity<AiChatResponse> chat(@RequestBody AiChatRequest request, @CurrentUser UUID userId) {
+    public ResponseEntity<AiChatResponse> chat(@Valid @RequestBody AiChatRequest request, @CurrentUser UUID userId) {
         return ResponseEntity.ok(aiChatService.chat(userId, request));
     }
 
@@ -42,7 +43,7 @@ public class AiController {
     }
 
     @PostMapping("/actions/apply")
-    public ResponseEntity<Void> applyAction(@RequestBody ApplyAiActionRequest request, @CurrentUser UUID userId) {
+    public ResponseEntity<Void> applyAction(@Valid @RequestBody ApplyAiActionRequest request, @CurrentUser UUID userId) {
         aiChatService.applyAction(userId, request);
         return ResponseEntity.ok().build();
     }
