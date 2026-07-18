@@ -32,7 +32,7 @@ public class ProgressService {
 
         List<TimeSeriesPointResponse> timeSeries = buildTimeSeries(domainId, metricKey, from, to);
         List<MilestoneResponse> milestones = milestoneService.getMilestonesForDomain(domainId, userId);
-        List<PersonalRecordResponse> prs = prService.getPrsForDomain(domainId);
+        List<PersonalRecordResponse> prs = prService.getPrsForDomain(domainId, userId);
 
         return ProgressResponse.builder()
                 .domainId(domainId)

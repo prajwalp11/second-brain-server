@@ -28,6 +28,7 @@ public class PersonalRecordService {
 
     private final PersonalRecordRepository prRepository;
     private final DomainMetricDefinitionRepository metricDefinitionRepository;
+    private final DomainService domainService;
 
     @Transactional
     public List<PersonalRecordResponse> checkAndUpdatePrs(SessionLog log, Map<String, Double> metrics) {
@@ -52,7 +53,8 @@ public class PersonalRecordService {
         return newPrs;
     }
 
-    public List<PersonalRecordResponse> getPrsForDomain(UUID domainId) {
+    public List<PersonalRecordResponse> getPrsForDomain(UUID domainId, UUID userId) {
+        domainService.assertOwnership(domainId, userId);
         return prRepository.findByDomainId(domainId).stream()
                 .map(pr -> {
                     PersonalRecordResponse dto = pr.toResponse();

@@ -33,7 +33,7 @@ public class ProgressController {
     }
 
     @GetMapping("/{domainId}/prs")
-    public ResponseEntity<List<PersonalRecordResponse>> getPrs(@PathVariable UUID domainId) {
-        return ResponseEntity.ok(prService.getPrsForDomain(domainId));
+    public ResponseEntity<List<PersonalRecordResponse>> getPrs(@PathVariable UUID domainId, @CurrentUser UUID userId) {
+        return ResponseEntity.ok(prService.getPrsForDomain(domainId, userId));
     }
 }
