@@ -26,7 +26,7 @@ public class AiSystemGeneratorService {
     private final PromptBuilder promptBuilder;
     private final ObjectMapper objectMapper;
 
-    public GeneratedSystemResponse generateSystem(DomainType type, SkillLevel level, String linkedUrl) {
+    public GeneratedSystemResponse generateSystem(DomainType type, SkillLevel level, String linkedUrl, String customName) {
         try {
             String systemPrompt = promptBuilder.systemGenerator(type, level, linkedUrl);
             List<GeminiMessage> messages = List.of(new GeminiMessage("user", List.of(Map.of("text", "Generate the system now."))));
@@ -34,7 +34,7 @@ public class AiSystemGeneratorService {
             return parseResponse(rawResponse);
         } catch (AiServiceException e) {
             log.error("AI service failed, using fallback system for {} at {} level", type, level, e);
-            return createFallbackSystem(type, level, linkedUrl);
+            return createFallbackSystem(type, level, linkedUrl, customName);
         }
     }
 
@@ -46,13 +46,14 @@ public class AiSystemGeneratorService {
             return parseResponse(rawResponse);
         } catch (AiServiceException e) {
             log.error("AI service failed, using fallback system for domain {}", domain.getId(), e);
-            return createFallbackSystem(domain.getDomainType(), domain.getSkillLevel(), domain.getLinkedResourceUrl());
+            return createFallbackSystem(domain.getDomainType(), domain.getSkillLevel(), domain.getLinkedResourceUrl(), domain.getCustomName());
         }
     }
 
-    private GeneratedSystemResponse createFallbackSystem(DomainType type, SkillLevel level, String linkedUrl) {
+    private GeneratedSystemResponse createFallbackSystem(DomainType type, SkillLevel level, String linkedUrl, String customName) {
+        String displayName = (type == DomainType.CUSTOM && customName != null) ? customName : type.name().toLowerCase();
         return GeneratedSystemResponse.builder()
-                .planDescription("Welcome to your " + type.name().toLowerCase() + " journey! Start by setting a consistent schedule and tracking your progress.")
+                .planDescription("Welcome to your " + displayName + " journey! Start by setting a consistent schedule and tracking your progress.")
                 .weeklySchedule("Mon,Tue,Wed,Thu,Fri,Sat,Sun")
                 .linkedResourceUrl(linkedUrl)
                 .linkedResourceTitle(linkedUrl != null ? "Resource" : null)

@@ -1,4 +1,4 @@
-package com.secondbrain.second_brain_server.services;
+package com.secondbrain.second_brain_server.service;
 
 import com.secondbrain.second_brain_server.dto.response.InsightsResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
@@ -69,10 +69,8 @@ public class InsightsService {
 
     private InsightsResponse parseAiResponse(String response, List<Domain> domains) {
         try {
-            // Extract JSON from response (remove markdown code blocks if present)
             String json = response.replaceAll("```json\\s*", "").replaceAll("```\\s*", "").trim();
             
-            // Simple JSON parsing (you could use Jackson for production)
             List<String> highlights = extractJsonArray(json, "highlights");
             List<String> patterns = extractJsonArray(json, "patterns");
             List<String> suggestions = extractJsonArray(json, "suggestions");

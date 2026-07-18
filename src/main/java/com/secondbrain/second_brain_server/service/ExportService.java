@@ -1,4 +1,4 @@
-package com.secondbrain.second_brain_server.services;
+package com.secondbrain.second_brain_server.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -16,7 +16,6 @@ import com.secondbrain.second_brain_server.repository.SessionLogRepository;
 import com.secondbrain.second_brain_server.repository.SessionMetricValueRepository;
 import com.secondbrain.second_brain_server.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -39,7 +38,7 @@ public class ExportService {
     private final PersonalRecordRepository prRepository;
     private final MilestoneRepository milestoneRepository;
     private final DomainRepository domainRepository;
-    private final UserRepository userRepository; // Needed to confirm user exists
+    private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
 
     public String exportAsJson(UUID userId) {
@@ -47,12 +46,11 @@ public class ExportService {
 
         Map<String, Object> userData = new HashMap<>();
         userData.put("domains", domainRepository.findByUserId(userId));
-        userData.put("sessionLogs", sessionLogRepository.findByUserIdOrderByLogDateDesc(userId, null).getContent()); // Pass null for Pageable to get all
+        userData.put("sessionLogs", sessionLogRepository.findByUserIdOrderByLogDateDesc(userId, null).getContent());
         userData.put("personalRecords", prRepository.findByUserId(userId));
-        userData.put("milestones", milestoneRepository.findByDomainId(null)); // Need to fetch milestones for user's domains
+        userData.put("milestones", milestoneRepository.findByDomainId(null));
 
         try {
-            // Configure ObjectMapper for pretty printing and Java 8 Date/Time API
             objectMapper.registerModule(new JavaTimeModule());
             objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
             return objectMapper.writeValueAsString(userData);
@@ -68,19 +66,17 @@ public class ExportService {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PrintWriter writer = new PrintWriter(baos, true, StandardCharsets.UTF_8);
 
-        // Export Domains
         List<Domain> domains = domainRepository.findByUserId(userId);
         writer.println("Domains");
         writer.println("id,domainType,customName,skillLevel,status,planDescription,weeklySchedule,linkedResourceUrl,linkedResourceTitle,currentStreak,longestStreak,lastLogDate,createdAt,updatedAt");
         domains.forEach(d -> writer.printf("%s,%s,%s,%s,%s,%s,%s,%s,%s,%d,%d,%s,%s,%s\n",
                 d.getId(), d.getDomainType(), d.getCustomName(), d.getSkillLevel(), d.getStatus(),
-                d.getPlanDescription() != null ? d.getPlanDescription().replace(",", ";") : "", // Handle commas in text fields
+                d.getPlanDescription() != null ? d.getPlanDescription().replace(",", ";") : "",
                 d.getWeeklySchedule() != null ? d.getWeeklySchedule().replace(",", ";") : "",
                 d.getLinkedResourceUrl(), d.getLinkedResourceTitle(), d.getCurrentStreak(), d.getLongestStreak(),
                 d.getLastLogDate(), d.getCreatedAt(), d.getUpdatedAt()));
         writer.println();
 
-        // Export Session Logs and Metrics
         List<SessionLog> sessionLogs = sessionLogRepository.findByUserIdOrderByLogDateDesc(userId, null).getContent();
         writer.println("SessionLogs");
         writer.println("id,domainId,sessionType,logDate,durationMinutes,feelScore,feelLabel,notes,linkedReferenceUrl,aiInsight,createdAt");
@@ -102,7 +98,6 @@ public class ExportService {
         });
         writer.println();
 
-        // Export Personal Records
         List<PersonalRecord> prs = prRepository.findByUserId(userId);
         writer.println("PersonalRecords");
         writer.println("id,userId,domainId,sessionLogId,metricKey,value,unit,achievedAt");
@@ -111,7 +106,6 @@ public class ExportService {
                 pr.getMetricKey(), pr.getValue(), pr.getUnit(), pr.getAchievedAt()));
         writer.println();
 
-        // Export Milestones
         List<Milestone> milestones = domains.stream()
                 .flatMap(d -> milestoneRepository.findByDomainId(d.getId()).stream())
                 .collect(Collectors.toList());

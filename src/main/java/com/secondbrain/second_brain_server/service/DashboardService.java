@@ -1,4 +1,4 @@
-package com.secondbrain.second_brain_server.services;
+package com.secondbrain.second_brain_server.service;
 
 import com.secondbrain.second_brain_server.dto.response.AiNudgeResponse;
 import com.secondbrain.second_brain_server.dto.response.DashboardResponse;
@@ -32,7 +32,7 @@ public class DashboardService {
     private final DomainRepository domainRepository;
     private final TaskService taskService;
     private final WeeklyStatService weeklyStatService;
-    private final AiNudgeService aiNudgeService; // Use AiNudgeService to get unread nudge
+    private final AiNudgeService aiNudgeService;
     private final UserRepository userRepository;
 
     public DashboardResponse getDashboard(UUID userId, LocalDate date) {
@@ -43,7 +43,7 @@ public class DashboardService {
         List<TaskResponse> todayFocus = taskService.getUpcomingTasks(userId);
         List<Domain> domains = domainRepository.findByUserId(userId);
         Map<UUID, StreakResponse> streaks = buildStreakMap(domains);
-        List<WeeklyStatResponse> weeklyStats = weeklyStatService.getWeeklyStats(userId, date); // Get stats for current week
+        List<WeeklyStatResponse> weeklyStats = weeklyStatService.getWeeklyStats(userId, date);
         Optional<AiNudgeResponse> aiNudge = aiNudgeService.getUnreadNudge(userId);
 
         return DashboardResponse.builder()
@@ -53,7 +53,7 @@ public class DashboardService {
                 .streaks(streaks)
                 .weeklyStats(weeklyStats)
                 .aiNudge(aiNudge.orElse(null))
-                .upcomingTasks(taskService.getTasksForUser(userId, List.of(TaskStatus.TODO, TaskStatus.IN_PROGRESS), null)) // All pending tasks
+                .upcomingTasks(taskService.getTasksForUser(userId, List.of(TaskStatus.TODO, TaskStatus.IN_PROGRESS), null))
                 .build();
     }
 

@@ -4,7 +4,7 @@ import com.secondbrain.second_brain_server.dto.request.CreateMilestoneRequest;
 import com.secondbrain.second_brain_server.dto.response.MilestoneResponse;
 import com.secondbrain.second_brain_server.enums.MilestoneStatus;
 import com.secondbrain.second_brain_server.security.CurrentUser;
-import com.secondbrain.second_brain_server.services.MilestoneService;
+import com.secondbrain.second_brain_server.service.MilestoneService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;

@@ -4,7 +4,7 @@ import com.secondbrain.second_brain_server.dto.request.LoginRequest;
 import com.secondbrain.second_brain_server.dto.request.RegisterRequest;
 import com.secondbrain.second_brain_server.dto.response.AuthResponse;
 import com.secondbrain.second_brain_server.security.CurrentUser;
-import com.secondbrain.second_brain_server.services.AuthService;
+import com.secondbrain.second_brain_server.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;

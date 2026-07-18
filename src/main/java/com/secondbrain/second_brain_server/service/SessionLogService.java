@@ -1,4 +1,4 @@
-package com.secondbrain.second_brain_server.services;
+package com.secondbrain.second_brain_server.service;
 
 import com.secondbrain.second_brain_server.dto.request.CreateSessionLogRequest;
 import com.secondbrain.second_brain_server.dto.response.PersonalRecordResponse;
@@ -62,7 +62,7 @@ public class SessionLogService {
         milestoneService.updateProgress(domain.getId());
         domainService.updateStreakForDomain(domain, request.getLogDate());
 
-        aiInsightService.generateSessionInsight(savedLog, newPrs); // Async call
+        aiInsightService.generateSessionInsight(savedLog, newPrs);
 
         return buildDto(savedLog, newPrs);
     }
@@ -70,12 +70,12 @@ public class SessionLogService {
     public Page<SessionLogResponse> getLogsForDomain(UUID domainId, UUID userId, Pageable pageable) {
         domainService.assertOwnership(domainId, userId);
         return sessionLogRepository.findByDomainIdOrderByLogDateDesc(domainId, pageable)
-                .map(log -> buildDto(log, new ArrayList<>())); // No new PRs on GET
+                .map(log -> buildDto(log, new ArrayList<>()));
     }
 
     public Page<SessionLogResponse> getLogsForUser(UUID userId, Pageable pageable) {
         return sessionLogRepository.findByUserIdOrderByLogDateDesc(userId, pageable)
-                .map(log -> buildDto(log, new ArrayList<>())); // No new PRs on GET
+                .map(log -> buildDto(log, new ArrayList<>()));
     }
 
     public SessionLogResponse getLogById(UUID logId, UUID userId) {
@@ -98,9 +98,8 @@ public class SessionLogService {
         }
 
         sessionLogRepository.delete(log);
-        // Re-evaluate milestones and streaks for the domain after deletion
         milestoneService.updateProgress(log.getDomain().getId());
-        domainService.updateStreakForDomain(log.getDomain(), log.getLogDate()); // This might need more complex logic for deletion
+        domainService.updateStreakForDomain(log.getDomain(), log.getLogDate());
     }
 
     private void persistMetricValues(SessionLog log, Map<String, Double> metrics) {
@@ -109,8 +108,7 @@ public class SessionLogService {
                         .sessionLog(log)
                         .metricKey(entry.getKey())
                         .numericValue(entry.getValue())
-                        // Unit would ideally come from DomainMetricDefinition, but not available here directly
-                        .unit("") // Placeholder for unit
+                        .unit("")
                         .build())
                 .collect(Collectors.toList());
         sessionMetricValueRepository.saveAll(metricValues);

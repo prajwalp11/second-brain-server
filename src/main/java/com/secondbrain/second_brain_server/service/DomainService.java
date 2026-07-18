@@ -1,4 +1,4 @@
-package com.secondbrain.second_brain_server.services;
+package com.secondbrain.second_brain_server.service;
 
 import com.secondbrain.second_brain_server.dto.request.CreateDomainRequest;
 import com.secondbrain.second_brain_server.dto.request.UpdateDomainRequest;
@@ -84,9 +84,8 @@ public class DomainService {
 
         Domain savedDomain = domainRepository.save(newDomain);
 
-        // Generate and apply AI system
         GeneratedSystemResponse generatedSystem = aiSystemGeneratorService.generateSystem(
-                request.getDomainType(), request.getSkillLevel(), request.getLinkedResourceUrl());
+                request.getDomainType(), request.getSkillLevel(), request.getLinkedResourceUrl(), request.getCustomName());
         applyGeneratedSystem(savedDomain, generatedSystem);
 
         return savedDomain.toResponse();
@@ -133,8 +132,6 @@ public class DomainService {
 
     @Transactional
     public void updateStreakForDomain(Domain domain, LocalDate logDate) {
-        // This is a simplified placeholder. Full streak calculation requires SessionLogService and StreakCalculator.
-        // It will be properly implemented when SessionLogService is built.
         if (domain.getLastLogDate() == null || logDate.isAfter(domain.getLastLogDate())) {
             domain.setLastLogDate(logDate);
             domain.setCurrentStreak(domain.getCurrentStreak() + 1);
@@ -143,7 +140,7 @@ public class DomainService {
             }
         } else if (logDate.isBefore(domain.getLastLogDate())) {
             // Logged for a past date, no change to current streak
-        } else { // logDate is same as lastLogDate, means multiple logs on same day, no streak change
+        } else {
             // No change
         }
         domain.setUpdatedAt(LocalDateTime.now());
@@ -158,7 +155,6 @@ public class DomainService {
     }
 
     private void applyGeneratedSystem(Domain domain, GeneratedSystemResponse generated) {
-        // Update domain details
         Optional.ofNullable(generated.getPlanDescription()).ifPresent(domain::setPlanDescription);
         Optional.ofNullable(generated.getWeeklySchedule()).ifPresent(domain::setWeeklySchedule);
         Optional.ofNullable(generated.getLinkedResourceUrl()).ifPresent(domain::setLinkedResourceUrl);
@@ -166,13 +162,10 @@ public class DomainService {
         domain.setUpdatedAt(LocalDateTime.now());
         domainRepository.save(domain);
 
-        // Delete existing metrics, milestones, tasks for regeneration
         metricDefinitionRepository.deleteByDomainId(domain.getId());
         milestoneRepository.findByDomainId(domain.getId()).forEach(milestoneRepository::delete);
         taskRepository.findByDomainId(domain.getId()).forEach(taskRepository::delete);
 
-
-        // Save generated metrics
         if (generated.getMetrics() != null) {
             List<DomainMetricDefinition> metrics = generated.getMetrics().stream()
                     .map(dto -> DomainMetricDefinition.builder()
@@ -189,7 +182,6 @@ public class DomainService {
             metricDefinitionRepository.saveAll(metrics);
         }
 
-        // Save generated milestones
         if (generated.getMilestones() != null) {
             List<Milestone> milestones = generated.getMilestones().stream()
                     .map(dto -> Milestone.builder()
@@ -207,7 +199,6 @@ public class DomainService {
             milestoneRepository.saveAll(milestones);
         }
 
-        // Save generated tasks
         if (generated.getTasks() != null) {
             List<Task> tasks = generated.getTasks().stream()
                     .map(dto -> Task.builder()
@@ -230,6 +221,7 @@ public class DomainService {
                 .orElseThrow(() -> new ResourceNotFoundException("Domain", domainId))
                 .checkOwnership(userId);
     }
+
     @Transactional(readOnly = true)
     public List<TimeSeriesPointResponse> getChartData(UUID domainId, UUID userId, int days) {
         assertOwnership(domainId, userId);
@@ -252,6 +244,4 @@ public class DomainService {
                 .sorted((a, b) -> a.getDate().compareTo(b.getDate()))
                 .collect(Collectors.toList());
     }
-
-
 }

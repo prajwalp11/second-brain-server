@@ -1,4 +1,4 @@
-package com.secondbrain.second_brain_server.services;
+package com.secondbrain.second_brain_server.service;
 
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.enums.DomainStatus;
@@ -29,7 +29,7 @@ public class StreakService {
     @Transactional
     public void recalculateStreak(Domain domain) {
         List<LocalDate> logDates = sessionLogRepository.findLogDatesByDomainId(domain.getId());
-        Collections.sort(logDates); // Ensure dates are sorted for StreakCalculator
+        Collections.sort(logDates);
 
         LocalDate today = LocalDate.now();
         Integer currentStreak = StreakCalculator.compute(logDates, domain.getWeeklySchedule(), today);
@@ -47,12 +47,9 @@ public class StreakService {
 
         return domainRepository.findByUserIdAndStatus(userId, DomainStatus.ACTIVE).stream()
                 .filter(domain -> {
-                    // A streak is at risk if the last log was yesterday and no log today,
-                    // AND the domain is scheduled for today.
                     if (domain.getLastLogDate() != null && domain.getLastLogDate().isEqual(yesterday)) {
                         boolean isScheduledToday = DateUtil.isScheduledDay(domain.getWeeklySchedule(), today);
                         if (isScheduledToday) {
-                            // Check if there's actually no log today
                             return sessionLogRepository.countByDomainIdAndLogDateBetween(domain.getId(), today, today) == 0;
                         }
                     }
@@ -60,6 +57,4 @@ public class StreakService {
                 })
                 .collect(Collectors.toList());
     }
-
-    // The computeStreak method is today delegated to StreakCalculator utility class
 }

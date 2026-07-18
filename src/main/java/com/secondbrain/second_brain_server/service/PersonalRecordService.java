@@ -1,4 +1,4 @@
-package com.secondbrain.second_brain_server.services;
+package com.secondbrain.second_brain_server.service;
 
 import com.secondbrain.second_brain_server.dto.response.PersonalRecordResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
@@ -44,7 +44,6 @@ public class PersonalRecordService {
 
                 if (oldMetricValue == null || isBetter(newMetricValue, oldMetricValue, metricDef.isHigherBetter())) {
                     PersonalRecordResponse prDto = upsertPr(log, metricDef.getMetricKey(), newMetricValue, metricDef.getUnit(), oldMetricValue);
-                    // Set label for DTO
                     prDto.setLabel(metricDef.getLabel());
                     newPrs.add(prDto);
                 }
@@ -58,7 +57,6 @@ public class PersonalRecordService {
         return prRepository.findByDomainId(domainId).stream()
                 .map(pr -> {
                     PersonalRecordResponse dto = pr.toResponse();
-                    // Populate label from metric definition
                     metricDefinitionRepository.findByDomainIdAndMetricKey(domainId, pr.getMetricKey())
                             .ifPresent(def -> dto.setLabel(def.getLabel()));
                     return dto;
@@ -70,7 +68,6 @@ public class PersonalRecordService {
         return prRepository.findByUserIdOrderByAchievedAtDesc(userId, pageable)
                 .map(pr -> {
                     PersonalRecordResponse dto = pr.toResponse();
-                    // Populate label from metric definition (requires fetching domainId from PR)
                     if (pr.getDomain() != null) {
                         metricDefinitionRepository.findByDomainIdAndMetricKey(pr.getDomain().getId(), pr.getMetricKey())
                                 .ifPresent(def -> dto.setLabel(def.getLabel()));

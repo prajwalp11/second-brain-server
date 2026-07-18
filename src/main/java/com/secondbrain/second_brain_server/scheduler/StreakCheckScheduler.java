@@ -3,7 +3,7 @@ package com.secondbrain.second_brain_server.scheduler;
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.repository.DomainRepository;
 
-import com.secondbrain.second_brain_server.services.StreakService;
+import com.secondbrain.second_brain_server.service.StreakService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;

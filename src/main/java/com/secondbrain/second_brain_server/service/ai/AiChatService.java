@@ -6,6 +6,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.secondbrain.second_brain_server.dto.request.AiChatRequest;
 import com.secondbrain.second_brain_server.dto.request.ApplyAiActionRequest;
+import com.secondbrain.second_brain_server.dto.request.CreateMilestoneRequest;
+import com.secondbrain.second_brain_server.dto.request.CreateTaskRequest;
+import com.secondbrain.second_brain_server.dto.request.UpdateDomainRequest;
 import com.secondbrain.second_brain_server.dto.response.AiActionResponse;
 import com.secondbrain.second_brain_server.dto.response.AiChatResponse;
 import com.secondbrain.second_brain_server.dto.response.AiConversationResponse;
@@ -20,9 +23,9 @@ import com.secondbrain.second_brain_server.external.GeminiClient;
 import com.secondbrain.second_brain_server.external.GeminiMessage;
 import com.secondbrain.second_brain_server.repository.AiConversationRepository;
 import com.secondbrain.second_brain_server.repository.AiMessageRepository;
-import com.secondbrain.second_brain_server.services.DomainService;
-import com.secondbrain.second_brain_server.services.MilestoneService;
-import com.secondbrain.second_brain_server.services.TaskService;
+import com.secondbrain.second_brain_server.service.DomainService;
+import com.secondbrain.second_brain_server.service.MilestoneService;
+import com.secondbrain.second_brain_server.service.TaskService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import lombok.extern.slf4j.Slf4j;
@@ -120,20 +123,30 @@ public class AiChatService {
 
     @Transactional
     public void applyAction(UUID userId, ApplyAiActionRequest request) {
-        // This is a simplified implementation. In a real app, you'd have more robust action handling.
+        Map<String, Object> payload = request.getPayload();
+        if (payload == null) {
+            throw new ValidationException("Action payload must not be null");
+        }
+
         switch (request.getActionType()) {
             case "ADD_TASK":
-                // Assuming payload contains necessary fields for CreateTaskRequest
-                // taskService.createTask(userId, objectMapper.convertValue(request.getPayload(), CreateTaskRequest.class));
-                log.info("AI Action: ADD_TASK for user {}. Payload: {}", userId, request.getPayload());
+                CreateTaskRequest taskRequest = objectMapper.convertValue(payload, CreateTaskRequest.class);
+                taskService.createTask(userId, taskRequest);
+                log.info("AI Action applied: ADD_TASK for user {}. Title: {}", userId, taskRequest.getTitle());
                 break;
             case "SET_MILESTONE":
-                // milestoneService.createMilestone(userId, objectMapper.convertValue(request.getPayload(), CreateMilestoneRequest.class));
-                log.info("AI Action: SET_MILESTONE for user {}. Payload: {}", userId, request.getPayload());
+                CreateMilestoneRequest milestoneRequest = objectMapper.convertValue(payload, CreateMilestoneRequest.class);
+                milestoneService.createMilestone(userId, milestoneRequest);
+                log.info("AI Action applied: SET_MILESTONE for user {}. Label: {}", userId, milestoneRequest.getLabel());
                 break;
             case "ADJUST_PLAN":
-                // domainService.updateDomain(domainId, userId, objectMapper.convertValue(request.getPayload(), UpdateDomainRequest.class));
-                log.info("AI Action: ADJUST_PLAN for user {}. Payload: {}", userId, request.getPayload());
+                UUID domainId = objectMapper.convertValue(payload.get("domainId"), UUID.class);
+                if (domainId == null) {
+                    throw new ValidationException("ADJUST_PLAN requires a domainId in payload");
+                }
+                UpdateDomainRequest domainRequest = objectMapper.convertValue(payload, UpdateDomainRequest.class);
+                domainService.updateDomain(domainId, userId, domainRequest);
+                log.info("AI Action applied: ADJUST_PLAN for user {}, domain {}", userId, domainId);
                 break;
             default:
                 throw new ValidationException("Unknown AI action type: " + request.getActionType());

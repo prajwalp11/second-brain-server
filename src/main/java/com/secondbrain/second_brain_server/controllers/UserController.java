@@ -2,8 +2,8 @@ package com.secondbrain.second_brain_server.controllers;
 
 import com.secondbrain.second_brain_server.dto.response.UserResponse;
 import com.secondbrain.second_brain_server.security.CurrentUser;
-import com.secondbrain.second_brain_server.services.AuthService;
-import com.secondbrain.second_brain_server.services.ExportService;
+import com.secondbrain.second_brain_server.service.AuthService;
+import com.secondbrain.second_brain_server.service.ExportService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;

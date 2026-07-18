@@ -1,4 +1,4 @@
-package com.secondbrain.second_brain_server.services;
+package com.secondbrain.second_brain_server.service;
 
 import com.secondbrain.second_brain_server.dto.response.WeeklyStatResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
@@ -48,7 +48,7 @@ public class WeeklyStatService {
 
         for (DomainMetricDefinition metric : metrics) {
             Double aggregatedValue = aggregateMetric(domain.getId(), metric.getMetricKey(), weekStart, weekEnd);
-            Double target = resolveTarget(domain, metric.getMetricKey()); // Placeholder for target resolution
+            Double target = resolveTarget(domain, metric.getMetricKey());
 
             domainWeeklyStats.add(WeeklyStatResponse.builder()
                     .domainId(domain.getId())
@@ -68,8 +68,6 @@ public class WeeklyStatService {
     }
 
     private Double resolveTarget(Domain domain, String metricKey) {
-        // Placeholder: LLD doesn't specify how targets are stored/resolved.
-        // This would typically involve parsing domain.getWeeklySchedule() or a dedicated target field.
-        return null; // No target for today
+        return null;
     }
 }

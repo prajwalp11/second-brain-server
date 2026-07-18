@@ -1,4 +1,4 @@
-package com.secondbrain.second_brain_server.services;
+package com.secondbrain.second_brain_server.service;
 
 import com.secondbrain.second_brain_server.dto.request.LoginRequest;
 import com.secondbrain.second_brain_server.dto.request.RegisterRequest;

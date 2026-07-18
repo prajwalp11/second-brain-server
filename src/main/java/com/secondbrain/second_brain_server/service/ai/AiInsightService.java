@@ -8,7 +8,7 @@ import com.secondbrain.second_brain_server.external.GeminiClient;
 import com.secondbrain.second_brain_server.external.GeminiMessage;
 import com.secondbrain.second_brain_server.repository.PersonalRecordRepository;
 import com.secondbrain.second_brain_server.repository.SessionLogRepository;
-import com.secondbrain.second_brain_server.services.WeeklyStatService; // Needed for weekly insight
+import com.secondbrain.second_brain_server.service.WeeklyStatService; // Needed for weekly insight
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import lombok.extern.slf4j.Slf4j;

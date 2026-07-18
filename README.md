@@ -39,6 +39,7 @@ Your brain is amazing at thinking, creating, and problem-solving. But it's terri
 - **Smart Domain Setup**: AI generates metrics, milestones, and tasks based on your goals
 - **Personalized Insights**: Weekly highlights, pattern detection, and suggestions
 - **Context-Aware Chat**: Conversational interface that understands your history
+- **One-Tap Actions**: AI proposes tasks, milestones, and plan adjustments — apply them instantly
 
 #### 📊 Flexible Tracking
 - **Domains**: Organize your life into areas (Gym, Running, Guitar, etc.)
@@ -156,6 +157,19 @@ POST /api/ai/chat
   "message": "Benched 225 for 5 reps, 3 sets"
 }
 
+# Apply AI-proposed action (one-tap)
+POST /api/ai/actions/apply
+{
+  "actionType": "ADD_TASK",
+  "payload": {
+    "domainId": "uuid",
+    "title": "Increase bench weight by 5lbs",
+    "description": "Progressive overload next session",
+    "dueDate": "2026-05-10"
+  }
+}
+# Supported actionTypes: ADD_TASK, SET_MILESTONE, ADJUST_PLAN
+
 # Manual logging
 POST /api/sessions
 {
@@ -233,8 +247,7 @@ src/main/java/com/secondbrain/second_brain_server/
 ├── repository/         # JPA repositories
 ├── security/           # JWT & authentication
 ├── service/            # Business logic
-│   └── ai/            # AI-related services
-├── services/           # Additional services
+│   └── ai/            # AI-related services (chat, nudges, insights)
 ├── scheduler/          # Scheduled tasks (nudges, streaks)
 └── util/               # Utility classes
 ```
@@ -280,6 +293,7 @@ src/main/java/com/secondbrain/second_brain_server/
 - **milestones**: Goals and targets
 - **tasks**: Action items
 - **ai_conversations**: Chat history
+- **ai_messages**: Individual messages within conversations
 - **ai_nudges**: Scheduled reminders
 
 ## 🤝 Contributing

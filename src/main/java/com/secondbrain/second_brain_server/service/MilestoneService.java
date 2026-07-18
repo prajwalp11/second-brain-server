@@ -1,4 +1,4 @@
-package com.secondbrain.second_brain_server.services;
+package com.secondbrain.second_brain_server.service;
 
 import com.secondbrain.second_brain_server.dto.request.CreateMilestoneRequest;
 import com.secondbrain.second_brain_server.dto.response.MilestoneResponse;
@@ -32,8 +32,8 @@ public class MilestoneService {
     private final MilestoneRepository milestoneRepository;
     private final PersonalRecordRepository prRepository;
     private final SessionMetricValueRepository sessionMetricValueRepository;
-    private final DomainService domainService; // To assert ownership
-    private final DomainMetricDefinitionRepository metricDefinitionRepository; // To check if metric is PR
+    private final DomainService domainService;
+    private final DomainMetricDefinitionRepository metricDefinitionRepository;
 
     @Transactional
     public MilestoneResponse createMilestone(UUID userId, CreateMilestoneRequest request) {
@@ -48,17 +48,17 @@ public class MilestoneService {
                 .unit(request.getUnit())
                 .status(MilestoneStatus.UPCOMING)
                 .deadline(request.getDeadline())
-                .aiGenerated(false) // User created
+                .aiGenerated(false)
                 .createdAt(LocalDateTime.now())
                 .build();
 
         Milestone savedMilestone = milestoneRepository.save(newMilestone);
-        updateProgress(domain.getId()); // Update progress immediately after creation
+        updateProgress(domain.getId());
         return savedMilestone.toResponse();
     }
 
     public List<MilestoneResponse> getMilestonesForDomain(UUID domainId, UUID userId) {
-        domainService.assertOwnership(domainId, userId); // Ensure user owns domain
+        domainService.assertOwnership(domainId, userId);
         return milestoneRepository.findByDomainId(domainId).stream()
                 .map(Milestone::toResponse)
                 .collect(Collectors.toList());
@@ -69,14 +69,13 @@ public class MilestoneService {
         Milestone milestone = milestoneRepository.findById(milestoneId)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone", milestoneId));
 
-        // Assert ownership via domain
         domainService.assertOwnership(milestone.getDomain().getId(), userId);
 
         milestone.setStatus(status);
         if (status == MilestoneStatus.DONE) {
             milestone.setCompletedAt(LocalDateTime.now());
         } else {
-            milestone.setCompletedAt(null); // Clear completed date if status changes from DONE
+            milestone.setCompletedAt(null);
         }
         milestoneRepository.save(milestone);
         return milestone.toResponse();
@@ -100,7 +99,6 @@ public class MilestoneService {
     }
 
     private Double resolveCurrentValue(Milestone milestone) {
-        // Check if the metric is PR-trackable
         boolean isPrMetric = metricDefinitionRepository.findByDomainIdAndMetricKey(milestone.getDomain().getId(), milestone.getMetricKey())
                 .map(DomainMetricDefinition::isPR)
                 .orElse(false);
@@ -110,8 +108,6 @@ public class MilestoneService {
                     .map(pr -> pr.getValue())
                     .orElse(0.0);
         } else {
-            // For non-PR metrics, get the latest value or sum over a period if applicable
-            // For simplicity, we'll get the max value recorded for this metric in the domain
             return sessionMetricValueRepository.findMaxValueForMetric(milestone.getDomain().getId(), milestone.getMetricKey())
                     .orElse(0.0);
         }

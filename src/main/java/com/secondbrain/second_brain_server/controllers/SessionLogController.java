@@ -3,7 +3,7 @@ package com.secondbrain.second_brain_server.controllers;
 import com.secondbrain.second_brain_server.dto.request.CreateSessionLogRequest;
 import com.secondbrain.second_brain_server.dto.response.SessionLogResponse;
 import com.secondbrain.second_brain_server.security.CurrentUser;
-import com.secondbrain.second_brain_server.services.SessionLogService;
+import com.secondbrain.second_brain_server.service.SessionLogService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;

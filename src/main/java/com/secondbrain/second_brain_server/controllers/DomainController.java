@@ -6,7 +6,7 @@ import com.secondbrain.second_brain_server.dto.response.DomainResponse;
 import com.secondbrain.second_brain_server.dto.response.GeneratedSystemResponse;
 import com.secondbrain.second_brain_server.dto.response.TimeSeriesPointResponse;
 import com.secondbrain.second_brain_server.security.CurrentUser;
-import com.secondbrain.second_brain_server.services.DomainService;
+import com.secondbrain.second_brain_server.service.DomainService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;

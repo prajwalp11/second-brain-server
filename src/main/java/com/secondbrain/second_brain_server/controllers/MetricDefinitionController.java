@@ -3,7 +3,7 @@ package com.secondbrain.second_brain_server.controllers;
 import com.secondbrain.second_brain_server.dto.request.CreateMetricDefinitionRequest;
 import com.secondbrain.second_brain_server.dto.response.MetricDefinitionResponse;
 import com.secondbrain.second_brain_server.security.CurrentUser;
-import com.secondbrain.second_brain_server.services.MetricDefinitionService;
+import com.secondbrain.second_brain_server.service.MetricDefinitionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;

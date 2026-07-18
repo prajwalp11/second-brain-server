@@ -1,4 +1,4 @@
-package com.secondbrain.second_brain_server.services;
+package com.secondbrain.second_brain_server.service;
 
 import com.secondbrain.second_brain_server.dto.response.MilestoneResponse;
 import com.secondbrain.second_brain_server.dto.response.PersonalRecordResponse;
@@ -24,8 +24,8 @@ public class ProgressService {
 
     private final SessionMetricValueRepository sessionMetricValueRepository;
     private final MilestoneService milestoneService;
-    private final PersonalRecordService prService; // Use prService to get DTOs
-    private final DomainService domainService; // To assert ownership
+    private final PersonalRecordService prService;
+    private final DomainService domainService;
 
     public ProgressResponse getProgress(UUID domainId, UUID userId, String metricKey, LocalDate from, LocalDate to) {
         domainService.assertOwnership(domainId, userId);

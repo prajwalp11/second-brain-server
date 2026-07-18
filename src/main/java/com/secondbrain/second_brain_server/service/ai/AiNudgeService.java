@@ -14,7 +14,7 @@ import com.secondbrain.second_brain_server.external.GeminiMessage;
 import com.secondbrain.second_brain_server.repository.AiNudgeRepository;
 import com.secondbrain.second_brain_server.repository.DomainRepository;
 import com.secondbrain.second_brain_server.repository.SessionLogRepository;
-import com.secondbrain.second_brain_server.services.StreakService;
+import com.secondbrain.second_brain_server.service.StreakService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import lombok.extern.slf4j.Slf4j;

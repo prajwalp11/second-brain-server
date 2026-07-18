@@ -296,6 +296,37 @@
           "response": []
         },
         {
+          "name": "Get Chart Data",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/domains/{{domainId}}/chart-data?days=30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "domains",
+                "{{domainId}}",
+                "chart-data"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "30"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Pause Domain",
           "request": {
             "method": "POST",
@@ -572,6 +603,40 @@
                 "api",
                 "metrics",
                 "{{metricId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reorder Metrics",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\"metric-uuid-1\", \"metric-uuid-2\", \"metric-uuid-3\"]"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/metrics/domain/{{domainId}}/reorder",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "metrics",
+                "domain",
+                "{{domainId}}",
+                "reorder"
               ]
             }
           },
@@ -1031,7 +1096,7 @@
           "response": []
         },
         {
-          "name": "Apply AI Action",
+          "name": "Apply AI Action - Add Task",
           "request": {
             "method": "POST",
             "header": [
@@ -1046,7 +1111,73 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"actionType\": \"CREATE_TASK\",\n  \"payload\": {\n    \"domainId\": \"{{domainId}}\",\n    \"title\": \"Study endgames\",\n    \"dueDate\": \"2026-05-10\"\n  }\n}"
+              "raw": "{\n  \"actionType\": \"ADD_TASK\",\n  \"payload\": {\n    \"domainId\": \"{{domainId}}\",\n    \"title\": \"Study endgames for 30 minutes\",\n    \"description\": \"Focus on king and pawn endgames\",\n    \"dueDate\": \"2026-05-10\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/actions/apply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ai",
+                "actions",
+                "apply"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Apply AI Action - Set Milestone",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actionType\": \"SET_MILESTONE\",\n  \"payload\": {\n    \"domainId\": \"{{domainId}}\",\n    \"label\": \"Reach 1500 rating\",\n    \"metricKey\": \"rating\",\n    \"targetValue\": 1500.0,\n    \"unit\": \"points\",\n    \"deadline\": \"2026-12-31\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/actions/apply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ai",
+                "actions",
+                "apply"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Apply AI Action - Adjust Plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actionType\": \"ADJUST_PLAN\",\n  \"payload\": {\n    \"domainId\": \"{{domainId}}\",\n    \"planDescription\": \"Switch to 4-day training split focusing on tactics\",\n    \"weeklySchedule\": \"Mon,Tue,Thu,Sat\"\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/ai/actions/apply",
@@ -1108,6 +1239,34 @@
                 "nudge",
                 "{{nudgeId}}",
                 "read"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Insights Controller",
+      "item": [
+        {
+          "name": "Get AI Insights",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/insights",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "insights"
               ]
             }
           },

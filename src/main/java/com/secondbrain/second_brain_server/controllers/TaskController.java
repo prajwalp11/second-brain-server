@@ -5,7 +5,7 @@ import com.secondbrain.second_brain_server.dto.request.UpdateTaskStatusRequest;
 import com.secondbrain.second_brain_server.dto.response.TaskResponse;
 import com.secondbrain.second_brain_server.enums.TaskStatus;
 import com.secondbrain.second_brain_server.security.CurrentUser;
-import com.secondbrain.second_brain_server.services.TaskService;
+import com.secondbrain.second_brain_server.service.TaskService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;

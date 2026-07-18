@@ -2,6 +2,7 @@ package com.secondbrain.second_brain_server.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import lombok.*;
 
 import java.time.LocalDate;
@@ -21,6 +22,7 @@ public class CreateMilestoneRequest {
     private String label;
 
     @NotBlank
+    @Pattern(regexp = "^[a-z][a-z0-9_]*$", message = "metricKey must be snake_case (lowercase letters, numbers, and underscores only, starting with a letter)")
     private String metricKey;
 
     @NotNull

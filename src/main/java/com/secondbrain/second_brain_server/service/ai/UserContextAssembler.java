@@ -22,7 +22,7 @@ import com.secondbrain.second_brain_server.repository.SessionLogRepository;
 import com.secondbrain.second_brain_server.repository.SessionMetricValueRepository;
 import com.secondbrain.second_brain_server.repository.TaskRepository;
 import com.secondbrain.second_brain_server.repository.UserRepository;
-import com.secondbrain.second_brain_server.services.WeeklyStatService;
+import com.secondbrain.second_brain_server.service.WeeklyStatService;
 import com.secondbrain.second_brain_server.util.DateUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

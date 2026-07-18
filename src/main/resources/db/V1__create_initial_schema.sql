@@ -43,6 +43,10 @@ CREATE TABLE domains (
 );
 
 
+-- INDEXES
+CREATE INDEX idx_domains_user ON domains(user_id);
+
+
 -- ============================================
 -- DOMAIN METRIC DEFINITIONS
 -- ============================================
@@ -62,6 +66,9 @@ CREATE TABLE domain_metric_definitions (
                                            CONSTRAINT fk_metric_domain
                                                FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE
 );
+
+-- INDEXES
+CREATE INDEX idx_metric_defs_domain ON domain_metric_definitions(domain_id);
 
 
 -- ============================================
@@ -114,6 +121,9 @@ CREATE TABLE session_metric_values (
                                            FOREIGN KEY (session_log_id) REFERENCES session_logs(id) ON DELETE CASCADE
 );
 
+-- INDEXES
+CREATE INDEX idx_metric_values_session ON session_metric_values(session_log_id);
+
 
 -- ============================================
 -- MILESTONES
@@ -136,6 +146,9 @@ CREATE TABLE milestones (
                             CONSTRAINT fk_milestone_domain
                                 FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE
 );
+
+-- INDEXES
+CREATE INDEX idx_milestones_domain ON milestones(domain_id);
 
 
 -- ============================================
@@ -163,6 +176,9 @@ CREATE TABLE personal_records (
                                       FOREIGN KEY (session_log_id) REFERENCES session_logs(id) ON DELETE SET NULL
 );
 
+-- INDEXES
+CREATE INDEX idx_personal_records_domain ON personal_records(domain_id, metric_key);
+
 
 -- ============================================
 -- TASKS
@@ -188,6 +204,10 @@ CREATE TABLE tasks (
                            FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE
 );
 
+-- INDEXES
+CREATE INDEX idx_tasks_user ON tasks(user_id);
+CREATE INDEX idx_tasks_domain ON tasks(domain_id);
+
 
 -- ============================================
 -- AI CONVERSATIONS
@@ -203,6 +223,9 @@ CREATE TABLE ai_conversations (
                                       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+-- INDEXES
+CREATE INDEX idx_ai_conversations_user ON ai_conversations(user_id);
+
 
 -- ============================================
 -- AI MESSAGES
@@ -217,6 +240,9 @@ CREATE TABLE ai_messages (
                              CONSTRAINT fk_ai_message_conversation
                                  FOREIGN KEY (conversation_id) REFERENCES ai_conversations(id) ON DELETE CASCADE
 );
+
+-- INDEXES
+CREATE INDEX idx_ai_messages_conversation ON ai_messages(conversation_id);
 
 
 -- ============================================
@@ -238,3 +264,6 @@ CREATE TABLE ai_nudges (
                            CONSTRAINT fk_ai_nudge_domain
                                FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE
 );
+
+-- INDEXES
+CREATE INDEX idx_ai_nudges_user ON ai_nudges(user_id);

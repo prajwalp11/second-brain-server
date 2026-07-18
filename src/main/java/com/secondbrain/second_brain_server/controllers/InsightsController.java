@@ -2,7 +2,7 @@ package com.secondbrain.second_brain_server.controllers;
 
 import com.secondbrain.second_brain_server.dto.response.InsightsResponse;
 import com.secondbrain.second_brain_server.security.CurrentUser;
-import com.secondbrain.second_brain_server.services.InsightsService;
+import com.secondbrain.second_brain_server.service.InsightsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
