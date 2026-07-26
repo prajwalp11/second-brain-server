@@ -28,7 +28,7 @@ public class AiSystemGeneratorService {
 
     public GeneratedSystemResponse generateSystem(DomainType type, SkillLevel level, String linkedUrl, String customName) {
         try {
-            String systemPrompt = promptBuilder.systemGenerator(type, level, linkedUrl);
+            String systemPrompt = promptBuilder.systemGenerator(type, level, linkedUrl, customName);
             List<GeminiMessage> messages = List.of(new GeminiMessage("user", List.of(Map.of("text", "Generate the system now."))));
             String rawResponse = geminiClient.completeWithJson(systemPrompt, messages);
             return parseResponse(rawResponse);
@@ -40,7 +40,7 @@ public class AiSystemGeneratorService {
 
     public GeneratedSystemResponse regenerateSystem(Domain domain) {
         try {
-            String systemPrompt = promptBuilder.systemGenerator(domain.getDomainType(), domain.getSkillLevel(), domain.getLinkedResourceUrl());
+            String systemPrompt = promptBuilder.systemGenerator(domain.getDomainType(), domain.getSkillLevel(), domain.getLinkedResourceUrl(), domain.getCustomName());
             List<GeminiMessage> messages = List.of(new GeminiMessage("user", List.of(Map.of("text", "Regenerate the system based on the current domain details."))));
             String rawResponse = geminiClient.completeWithJson(systemPrompt, messages);
             return parseResponse(rawResponse);

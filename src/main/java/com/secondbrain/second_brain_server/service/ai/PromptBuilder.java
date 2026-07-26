@@ -23,7 +23,7 @@ public class PromptBuilder {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final DecimalFormat DECIMAL_FORMAT = new DecimalFormat("#.##");
 
-    public String systemGenerator(DomainType type, SkillLevel level, String url) {
+    public String systemGenerator(DomainType type, SkillLevel level, String url, String customName) {
         StringBuilder prompt = new StringBuilder();
         prompt.append("You are an expert system designer for a personal growth and habit tracking application called 'Second Brain'.\n");
         prompt.append("Your task is to generate a comprehensive system for a user's new domain based on their input.\n");
@@ -65,6 +65,9 @@ public class PromptBuilder {
         prompt.append("User Input:\n");
         prompt.append("Domain Type: ").append(type).append("\n");
         prompt.append("Skill Level: ").append(level).append("\n");
+        if (customName != null && !customName.isEmpty()) {
+            prompt.append("Specific focus/variation: ").append(customName).append("\n");
+        }
         if (url != null && !url.isEmpty()) {
             prompt.append("Linked Resource: ").append(url).append("\n");
         }
