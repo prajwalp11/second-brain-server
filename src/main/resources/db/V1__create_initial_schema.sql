@@ -267,3 +267,11 @@ CREATE TABLE ai_nudges (
 
 -- INDEXES
 CREATE INDEX idx_ai_nudges_user ON ai_nudges(user_id);
+-- ============================================
+-- CUSTOM DOMAIN UNIQUE CONSTRAINT
+-- Allows multiple CUSTOM domains per user, but each must have a unique custom_name
+-- Different users can have the same custom_name
+-- ============================================
+CREATE UNIQUE INDEX uq_domain_user_custom_name
+    ON domains (user_id, custom_name)
+    WHERE domain_type = 'CUSTOM';

@@ -12,8 +12,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.text.DecimalFormat;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.format.TextStyle;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Component
@@ -24,8 +27,12 @@ public class PromptBuilder {
     private static final DecimalFormat DECIMAL_FORMAT = new DecimalFormat("#.##");
 
     public String systemGenerator(DomainType type, SkillLevel level, String url, String customName) {
+        LocalDate today = LocalDate.now();
+        String dayOfWeek = today.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
+
         StringBuilder prompt = new StringBuilder();
         prompt.append("You are an expert system designer for a personal growth and habit tracking application called 'Second Brain'.\n");
+        prompt.append("Today's date is: ").append(today.format(DATE_FORMATTER)).append(" (").append(dayOfWeek).append(")\n");
         prompt.append("Your task is to generate a comprehensive system for a user's new domain based on their input.\n");
         prompt.append("The output MUST be a valid JSON object with the following structure:\n");
         prompt.append("{\n");
@@ -60,8 +67,14 @@ public class PromptBuilder {
         prompt.append("      \"dueDate\": \"YYYY-MM-DD\"\n");
         prompt.append("    }\n");
         prompt.append("  ]\n");
-        prompt.append("}\n");
-        prompt.append("Ensure all fields are populated with sensible defaults or generated content. For metrics, provide at least 3-5 relevant metrics. For milestones, provide 2-3 achievable milestones. For tasks, provide 2-3 initial tasks.\n");
+        prompt.append("}\n\n");
+        prompt.append("IMPORTANT GUIDELINES:\n");
+        prompt.append("- All deadlines and due dates MUST be in the future relative to today's date.\n");
+        prompt.append("- For metrics, provide at least 3-5 relevant metrics.\n");
+        prompt.append("- For milestones, provide 2-3 achievable milestones with realistic deadlines.\n");
+        prompt.append("- For tasks, provide 2-3 initial tasks with due dates in the next 1-2 weeks.\n");
+        prompt.append("- For linkedResourceUrl: Find and provide a REAL, high-quality resource URL (YouTube tutorial, official guide, reputable website) that is appropriate for the user's skill level and domain. Do NOT use the user's provided URL if it looks invalid or placeholder-like.\n");
+        prompt.append("- For linkedResourceTitle: Provide the actual title of the linked resource.\n\n");
         prompt.append("User Input:\n");
         prompt.append("Domain Type: ").append(type).append("\n");
         prompt.append("Skill Level: ").append(level).append("\n");
@@ -69,7 +82,7 @@ public class PromptBuilder {
             prompt.append("Specific focus/variation: ").append(customName).append("\n");
         }
         if (url != null && !url.isEmpty()) {
-            prompt.append("Linked Resource: ").append(url).append("\n");
+            prompt.append("User's provided resource (use only if it looks like a real, relevant URL): ").append(url).append("\n");
         }
         prompt.append("Generate the system now.\n");
         return prompt.toString();

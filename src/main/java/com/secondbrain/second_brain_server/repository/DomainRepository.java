@@ -18,6 +18,7 @@ public interface DomainRepository extends JpaRepository<Domain, UUID> {
     Optional<Domain> findByUserIdAndDomainType(UUID userId, DomainType type);
     List<Domain> findByUserIdAndStatus(UUID userId, DomainStatus status);
     boolean existsByUserIdAndDomainType(UUID userId, DomainType type);
+    boolean existsByUserIdAndCustomName(UUID userId, String customName);
 
     @Query("SELECT d FROM Domain d WHERE d.status = 'ACTIVE' AND d.lastLogDate < :today")
     List<Domain> findAllActiveForStreakCheck(LocalDate today);

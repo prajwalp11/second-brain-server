@@ -9,4 +9,8 @@ public class DomainAlreadyExistsException extends RuntimeException {
     public DomainAlreadyExistsException(DomainType type) {
         super(String.format("Domain with type '%s' already exists for this user.", type));
     }
+
+    public DomainAlreadyExistsException(String message) {
+        super(message);
+    }
 }

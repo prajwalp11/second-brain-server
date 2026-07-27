@@ -65,8 +65,21 @@ public class DomainService {
     @Transactional
     public DomainResponse createDomain(UUID userId, CreateDomainRequest request) {
         log.info("Creating domain for user: {}, type: {}", userId, request.getDomainType());
-        if (domainRepository.existsByUserIdAndDomainType(userId, request.getDomainType())) {
-            throw new DomainAlreadyExistsException(request.getDomainType());
+
+        if (request.getDomainType() == DomainType.CUSTOM) {
+            // CUSTOM domains: require customName, enforce unique customName per user
+            if (request.getCustomName() == null || request.getCustomName().isBlank()) {
+                throw new ValidationException("Custom domain requires a customName.");
+            }
+            if (domainRepository.existsByUserIdAndCustomName(userId, request.getCustomName())) {
+                throw new DomainAlreadyExistsException(
+                        "A custom domain named '" + request.getCustomName() + "' already exists.");
+            }
+        } else {
+            // Non-custom types: only one per type allowed
+            if (domainRepository.existsByUserIdAndDomainType(userId, request.getDomainType())) {
+                throw new DomainAlreadyExistsException(request.getDomainType());
+            }
         }
 
         Domain newDomain = Domain.builder()
