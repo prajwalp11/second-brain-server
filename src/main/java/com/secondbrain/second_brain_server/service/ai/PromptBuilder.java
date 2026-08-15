@@ -26,7 +26,7 @@ public class PromptBuilder {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final DecimalFormat DECIMAL_FORMAT = new DecimalFormat("#.##");
 
-    public String systemGenerator(DomainType type, SkillLevel level, String url, String customName) {
+    public String systemGenerator(DomainType type, SkillLevel level, String url, String customName, List<String> existingSchedules) {
         LocalDate today = LocalDate.now();
         String dayOfWeek = today.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
 
@@ -37,7 +37,7 @@ public class PromptBuilder {
         prompt.append("The output MUST be a valid JSON object with the following structure:\n");
         prompt.append("{\n");
         prompt.append("  \"planDescription\": \"string\",\n");
-        prompt.append("  \"weeklySchedule\": \"string\",\n");
+        prompt.append("  \"weeklySchedule\": \"string (MUST be comma-separated 3-letter days ONLY, e.g. Mon,Wed,Fri — no spaces after commas, no full day names)\",\n");
         prompt.append("  \"metrics\": [\n");
         prompt.append("    {\n");
         prompt.append("      \"metricKey\": \"string\",\n");
@@ -69,6 +69,8 @@ public class PromptBuilder {
         prompt.append("  ]\n");
         prompt.append("}\n\n");
         prompt.append("IMPORTANT GUIDELINES:\n");
+        prompt.append("- planDescription MUST be SHORT: 1-2 sentences max. Example: '3x/week Push Pull Legs, progressive overload focus'. Do NOT write paragraphs.\n");
+        prompt.append("- weeklySchedule: Use short 3-letter day names like 'Mon,Wed,Fri' NOT full day names.\n");
         prompt.append("- All deadlines and due dates MUST be in the future relative to today's date.\n");
         prompt.append("- For metrics, provide at least 3-5 relevant metrics.\n");
         prompt.append("- For milestones, provide 2-3 achievable milestones with realistic deadlines.\n");
@@ -83,6 +85,12 @@ public class PromptBuilder {
         }
         if (url != null && !url.isEmpty()) {
             prompt.append("User's provided resource (use only if it looks like a real, relevant URL): ").append(url).append("\n");
+        }
+        if (existingSchedules != null && !existingSchedules.isEmpty()) {
+            prompt.append("EXISTING SCHEDULES (AVOID CONFLICTS - pick different days where possible):\n");
+            for (String schedule : existingSchedules) {
+                prompt.append("  - ").append(schedule).append("\n");
+            }
         }
         prompt.append("Generate the system now.\n");
         return prompt.toString();

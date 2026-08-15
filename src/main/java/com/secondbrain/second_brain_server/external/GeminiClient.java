@@ -132,6 +132,10 @@ public class GeminiClient {
                 JsonNode textNode = root.path("candidates").path(0).path("content").path("parts").path(0).path("text");
                 if (!textNode.isMissingNode()) {
                     String jsonString = textNode.asText();
+
+                    // Strip markdown code fences if present (```json ... ``` or ``` ... ```)
+                    jsonString = stripMarkdownFences(jsonString);
+
                     // Attempt to parse the extracted text as JSON to ensure it's valid
                     objectMapper.readTree(jsonString);
                     return jsonString;
@@ -143,6 +147,18 @@ public class GeminiClient {
         }
         log.error("Gemini API JSON response error: Status={}, Body={}", response.getStatusCode(), response.getBody());
         throw new AiServiceException("Gemini API JSON call failed with status: " + response.getStatusCode());
+    }
+
+    private String stripMarkdownFences(String text) {
+        if (text == null) return null;
+        String stripped = text.trim();
+        if (stripped.startsWith("```")) {
+            // Remove opening fence (```json or ``` with optional language tag)
+            stripped = stripped.replaceFirst("^```[a-zA-Z]*\\s*\\n?", "");
+            // Remove closing fence
+            stripped = stripped.replaceFirst("\\n?\\s*```\\s*$", "");
+        }
+        return stripped.trim();
     }
 
     private String retryOnRateLimit(Supplier<String> supplier) {

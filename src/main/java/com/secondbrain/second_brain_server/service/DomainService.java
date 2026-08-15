@@ -97,8 +97,14 @@ public class DomainService {
 
         Domain savedDomain = domainRepository.save(newDomain);
 
+        // Gather existing domain schedules so AI can avoid conflicts
+        List<String> existingSchedules = domainRepository.findByUserId(userId).stream()
+                .filter(d -> d.getWeeklySchedule() != null && !d.getId().equals(savedDomain.getId()))
+                .map(d -> (d.getCustomName() != null ? d.getCustomName() : d.getDomainType().name()) + ": " + d.getWeeklySchedule())
+                .collect(Collectors.toList());
+
         GeneratedSystemResponse generatedSystem = aiSystemGeneratorService.generateSystem(
-                request.getDomainType(), request.getSkillLevel(), request.getLinkedResourceUrl(), request.getCustomName());
+                request.getDomainType(), request.getSkillLevel(), request.getLinkedResourceUrl(), request.getCustomName(), existingSchedules);
         applyGeneratedSystem(savedDomain, generatedSystem);
 
         return savedDomain.toResponse();

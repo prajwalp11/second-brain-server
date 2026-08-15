@@ -40,7 +40,10 @@ public class DashboardService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", userId));
 
         String greeting = buildGreeting(user.getFirstName(), date);
-        List<TaskResponse> todayFocus = taskService.getUpcomingTasks(userId);
+        // Only tasks due today for "Today's focus"
+        List<TaskResponse> todayFocus = taskService.getUpcomingTasks(userId).stream()
+                .filter(t -> t.getDueDate() != null && t.getDueDate().equals(date))
+                .collect(Collectors.toList());
         List<Domain> domains = domainRepository.findByUserId(userId);
         Map<UUID, StreakResponse> streaks = buildStreakMap(domains);
         List<WeeklyStatResponse> weeklyStats = weeklyStatService.getWeeklyStats(userId, date);

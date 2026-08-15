@@ -29,7 +29,7 @@ CREATE TABLE domains (
                          skill_level VARCHAR(50),
                          status VARCHAR(50),
                          plan_description TEXT,
-                         weekly_schedule VARCHAR(255),
+                         weekly_schedule TEXT,
                          linked_resource_url VARCHAR(500),
                          linked_resource_title VARCHAR(255),
                          current_streak INT DEFAULT 0,
