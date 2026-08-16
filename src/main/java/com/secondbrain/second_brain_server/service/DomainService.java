@@ -134,6 +134,14 @@ public class DomainService {
     }
 
     @Transactional
+    public void resumeDomain(UUID domainId, UUID userId) {
+        Domain domain = assertOwnership(domainId, userId);
+        domain.setStatus(DomainStatus.ACTIVE);
+        domain.setUpdatedAt(LocalDateTime.now());
+        domainRepository.save(domain);
+    }
+
+    @Transactional
     public void archiveDomain(UUID domainId, UUID userId) {
         Domain domain = assertOwnership(domainId, userId);
         domain.setStatus(DomainStatus.ARCHIVED);

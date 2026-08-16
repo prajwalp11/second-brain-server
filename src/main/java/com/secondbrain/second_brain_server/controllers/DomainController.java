@@ -58,6 +58,12 @@ public class DomainController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/{domainId}/resume")
+    public ResponseEntity<Void> resumeDomain(@PathVariable UUID domainId, @CurrentUser UUID userId) {
+        domainService.resumeDomain(domainId, userId);
+        return ResponseEntity.ok().build();
+    }
+
     @PostMapping("/{domainId}/archive")
     public ResponseEntity<Void> archiveDomain(@PathVariable UUID domainId, @CurrentUser UUID userId) {
         domainService.archiveDomain(domainId, userId);

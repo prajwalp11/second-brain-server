@@ -8,6 +8,7 @@ import com.secondbrain.second_brain_server.dto.response.WeeklyStatResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.entities.User;
 import com.secondbrain.second_brain_server.util.DateUtil;
+import com.secondbrain.second_brain_server.enums.DomainStatus;
 import com.secondbrain.second_brain_server.enums.TaskStatus;
 import com.secondbrain.second_brain_server.exception.ResourceNotFoundException;
 import com.secondbrain.second_brain_server.repository.AiNudgeRepository;
@@ -23,6 +24,8 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -41,14 +44,31 @@ public class DashboardService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", userId));
 
         String greeting = buildGreeting(user.getFirstName(), date);
-        // Only tasks due today for "Today's focus"
+
+        // Only active domains
+        List<Domain> activeDomains = domainRepository.findByUserIdAndStatus(userId, DomainStatus.ACTIVE);
+        List<UUID> activeDomainIds = activeDomains.stream().map(Domain::getId).collect(Collectors.toList());
+
+        // Only tasks due today for active domains
         List<TaskResponse> todayFocus = taskService.getUpcomingTasks(userId).stream()
                 .filter(t -> t.getDueDate() != null && t.getDueDate().equals(date))
+                .filter(t -> t.getDomainId() == null || activeDomainIds.contains(t.getDomainId()))
                 .collect(Collectors.toList());
-        List<Domain> domains = domainRepository.findByUserId(userId);
-        Map<UUID, StreakResponse> streaks = buildStreakMap(domains);
+
+        Map<UUID, StreakResponse> streaks = buildStreakMap(activeDomains);
         List<WeeklyStatResponse> weeklyStats = weeklyStatService.getWeeklyStats(userId, DateUtil.getWeekStart(date));
+        // Filter weekly stats to active domains only
+        weeklyStats = weeklyStats.stream()
+                .filter(ws -> activeDomainIds.contains(ws.getDomainId()))
+                .collect(Collectors.toList());
+
         Optional<AiNudgeResponse> aiNudge = aiNudgeService.getUnreadNudge(userId);
+
+        // Upcoming tasks — only for active domains
+        List<TaskResponse> upcomingTasks = taskService.getTasksForUser(userId, List.of(TaskStatus.TODO, TaskStatus.IN_PROGRESS), null)
+                .stream()
+                .filter(t -> t.getDomainId() == null || activeDomainIds.contains(t.getDomainId()))
+                .collect(Collectors.toList());
 
         return DashboardResponse.builder()
                 .greeting(greeting)
@@ -57,7 +77,7 @@ public class DashboardService {
                 .streaks(streaks)
                 .weeklyStats(weeklyStats)
                 .aiNudge(aiNudge.orElse(null))
-                .upcomingTasks(taskService.getTasksForUser(userId, List.of(TaskStatus.TODO, TaskStatus.IN_PROGRESS), null))
+                .upcomingTasks(upcomingTasks)
                 .build();
     }
 
