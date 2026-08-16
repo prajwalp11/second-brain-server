@@ -111,6 +111,17 @@ public class TaskService {
     }
 
     @Transactional
+    public void markDueTasksDoneForDomain(UUID domainId, LocalDate logDate) {
+        List<Task> pendingTasks = taskRepository.findByDomainIdAndDueDateLessThanEqualAndStatusIn(
+                domainId, logDate, List.of(TaskStatus.TODO, TaskStatus.IN_PROGRESS));
+        pendingTasks.forEach(task -> {
+            task.setStatus(TaskStatus.DONE);
+            task.setCompletedAt(LocalDateTime.now());
+        });
+        taskRepository.saveAll(pendingTasks);
+    }
+
+    @Transactional
     public List<TaskResponse> bulkCreateFromAi(UUID userId, List<TaskResponse> tasks) {
         List<Task> newTasks = tasks.stream()
                 .map(dto -> Task.builder()

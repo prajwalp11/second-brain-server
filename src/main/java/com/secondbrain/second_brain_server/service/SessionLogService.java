@@ -35,6 +35,7 @@ public class SessionLogService {
     private final DomainService domainService;
     private final PersonalRecordService prService;
     private final MilestoneService milestoneService;
+    private final TaskService taskService;
     private final AiInsightService aiInsightService;
 
     @Transactional
@@ -61,6 +62,7 @@ public class SessionLogService {
         List<PersonalRecordResponse> newPrs = prService.checkAndUpdatePrs(savedLog, request.getMetrics());
         milestoneService.updateProgress(domain.getId());
         domainService.updateStreakForDomain(domain, request.getLogDate());
+        taskService.markDueTasksDoneForDomain(domain.getId(), request.getLogDate());
 
         aiInsightService.generateSessionInsight(savedLog, newPrs);
 

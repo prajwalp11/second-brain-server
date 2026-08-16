@@ -731,9 +731,10 @@ package "services" {
     5. prService.checkAndUpdatePrs()
     6. milestoneService.updateProgress()
     7. domainService.updateStreak()
-    8. aiInsightService.generate() @Async
-    9. return dto with newPrs[]
-    Steps 1-7 atomic. Step 8 async.
+    8. taskService.markDueTasksDone()
+    9. aiInsightService.generate() @Async
+    10. return dto with newPrs[]
+    Steps 1-8 atomic. Step 9 async.
   end note
   class PersonalRecordService {
     - prRepository : PersonalRecordRepository
@@ -937,8 +938,35 @@ package "service.ai" {
     + sessionInsight(log: SessionLog, recentLogs: List<SessionLog>, prs: List<PersonalRecordDto>) : String
     + nudge(domain: Domain, logs: List<SessionLog>, type: NudgeType) : String
     + chat(context: UserContext) : String
+    + taskGeneration(context: UserContext, domain: Domain) : String
     + weeklyInsight(stats: List<WeeklyStatDto>, prs: List<PersonalRecordDto>) : String
   }
+  class TaskGenerationService {
+    - domainRepository : DomainRepository
+    - taskRepository : TaskRepository
+    - contextAssembler : UserContextAssembler
+    - promptBuilder : PromptBuilder
+    - geminiClient : GeminiClient
+    --
+    + generateTasksForUser(userId: UUID) : int
+    + generateTasksForDomain(userId: UUID, domain: Domain, context: UserContext) : int
+    - parseGeneratedTasks(rawJson: String) : List<GeneratedTask>
+  }
+  note right of TaskGenerationService
+    generateTasksForUser():
+    1. Fetch all ACTIVE domains for user
+    2. Assemble full UserContext
+    3. For each domain:
+       - check pending tasks count
+       - if 0: call AI with full context
+       - parse JSON array of tasks
+       - save as aiGenerated=true
+    Only generates when domain has
+    zero pending tasks — no duplicates.
+    AI sees recent logs, PRs, streaks,
+    milestones, feel patterns to create
+    progressive, context-aware tasks.
+  end note
   class UserContext {
     + userId : UUID
     + userName : String
@@ -1047,12 +1075,14 @@ package "controllers" {
   }
   class TaskController {
     - taskService : TaskService
+    - taskGenerationService : TaskGenerationService
     --
     + getTasks(status: TaskStatus, domainId: UUID) : ResponseEntity<List<TaskDto>>
     + getTodayTasks() : ResponseEntity<List<TaskDto>>
     + createTask(request: CreateTaskRequest) : ResponseEntity<TaskDto>
     + updateTask(taskId: UUID, request: UpdateTaskStatusRequest) : ResponseEntity<TaskDto>
     + deleteTask(taskId: UUID) : ResponseEntity<Void>
+    + generateTasks() : ResponseEntity<Map<String, Integer>>
   }
   class MilestoneController {
     - milestoneService : MilestoneService
@@ -1227,6 +1257,21 @@ package "scheduler" {
     --
     + runMidnight() : void
   }
+  class DailyTaskGenerationScheduler {
+    - userRepository : UserRepository
+    - taskGenerationService : TaskGenerationService
+    --
+    + generateDailyTasks() : void
+  }
+  note right of DailyTaskGenerationScheduler
+    Runs daily at 5 AM.
+    For each user, checks all active domains.
+    If a domain has 0 pending tasks,
+    calls AI to generate 2-4 new tasks
+    based on recent progress, PRs,
+    streaks, weekly stats, and feel patterns.
+    Tasks are progressive — not repetitive.
+  end note
   class WeeklyReviewScheduler {
     - aiInsightService : AiInsightService
     --
@@ -1428,6 +1473,7 @@ DashboardController ..> DashboardService : uses
 ProgressController ..> ProgressService : uses
 ProgressController ..> PersonalRecordService : uses
 TaskController ..> TaskService : uses
+TaskController ..> TaskGenerationService : uses
 MilestoneController ..> MilestoneService : uses
 AiController ..> AiChatService : uses
 AiController ..> AiNudgeService : uses
@@ -1448,5 +1494,15 @@ StreakCheckScheduler ..> StreakService : triggers
 
 WeeklyReviewScheduler ..> AiInsightService : triggers
 
+DailyTaskGenerationScheduler ..> UserRepository : uses
+DailyTaskGenerationScheduler ..> TaskGenerationService : triggers
+
+TaskGenerationService ..> DomainRepository : uses
+TaskGenerationService ..> TaskRepository : uses
+TaskGenerationService ..> UserContextAssembler : uses
+TaskGenerationService ..> PromptBuilder : uses
+TaskGenerationService ..> GeminiClient : calls
+
+SessionLogService ..> TaskService : uses
 
 @enduml

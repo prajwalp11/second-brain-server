@@ -7,6 +7,7 @@ import com.secondbrain.second_brain_server.dto.response.TaskResponse;
 import com.secondbrain.second_brain_server.dto.response.WeeklyStatResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.entities.User;
+import com.secondbrain.second_brain_server.util.DateUtil;
 import com.secondbrain.second_brain_server.enums.TaskStatus;
 import com.secondbrain.second_brain_server.exception.ResourceNotFoundException;
 import com.secondbrain.second_brain_server.repository.AiNudgeRepository;
@@ -46,7 +47,7 @@ public class DashboardService {
                 .collect(Collectors.toList());
         List<Domain> domains = domainRepository.findByUserId(userId);
         Map<UUID, StreakResponse> streaks = buildStreakMap(domains);
-        List<WeeklyStatResponse> weeklyStats = weeklyStatService.getWeeklyStats(userId, date);
+        List<WeeklyStatResponse> weeklyStats = weeklyStatService.getWeeklyStats(userId, DateUtil.getWeekStart(date));
         Optional<AiNudgeResponse> aiNudge = aiNudgeService.getUnreadNudge(userId);
 
         return DashboardResponse.builder()

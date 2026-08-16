@@ -1,6 +1,8 @@
 package com.secondbrain.second_brain_server.service.ai;
 
+import com.secondbrain.second_brain_server.dto.response.MilestoneResponse;
 import com.secondbrain.second_brain_server.dto.response.PersonalRecordResponse;
+import com.secondbrain.second_brain_server.dto.response.SessionLogResponse;
 import com.secondbrain.second_brain_server.dto.response.WeeklyStatResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.entities.SessionLog;
@@ -171,6 +173,104 @@ public class PromptBuilder {
         prompt.append("If no action is proposed, the 'proposedActions' array should be empty. Otherwise, provide a helpful reply and the action.\n");
         prompt.append("If the user's query is not an action, just provide a helpful text reply. Your reply should be concise and directly address the user's query.\n");
         prompt.append("User's message will follow.\n");
+        return prompt.toString();
+    }
+
+    public String taskGeneration(UserContext context, Domain domain) {
+        LocalDate today = LocalDate.now();
+        String dayOfWeek = today.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
+
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("You are an AI assistant for a personal growth app called 'Second Brain'.\n");
+        prompt.append("Today is ").append(today.format(DATE_FORMATTER)).append(" (").append(dayOfWeek).append(").\n");
+        prompt.append("Your task: Generate 2-4 new actionable tasks for the user's domain based on their progress.\n\n");
+
+        // Domain info
+        prompt.append("DOMAIN: ").append(domain.getCustomName() != null ? domain.getCustomName() : domain.getDomainType()).append("\n");
+        prompt.append("Skill Level: ").append(domain.getSkillLevel()).append("\n");
+        prompt.append("Weekly Schedule: ").append(domain.getWeeklySchedule() != null ? domain.getWeeklySchedule() : "Not set").append("\n");
+        prompt.append("Plan: ").append(domain.getPlanDescription() != null ? domain.getPlanDescription() : "None").append("\n");
+        prompt.append("Current Streak: ").append(domain.getCurrentStreak()).append(" days\n");
+        if (domain.getLastLogDate() != null) {
+            prompt.append("Last Log: ").append(domain.getLastLogDate().format(DATE_FORMATTER)).append("\n");
+        }
+        prompt.append("\n");
+
+        // Recent logs for this domain
+        List<SessionLogResponse> domainLogs = context.getRecentLogs().stream()
+                .filter(l -> l.getDomainId().equals(domain.getId()))
+                .limit(10)
+                .collect(Collectors.toList());
+        if (!domainLogs.isEmpty()) {
+            prompt.append("RECENT SESSIONS (last ").append(domainLogs.size()).append("):\n");
+            domainLogs.forEach(l -> {
+                prompt.append("  - ").append(l.getLogDate()).append(": ");
+                if (l.getSessionType() != null) prompt.append(l.getSessionType()).append(", ");
+                prompt.append("Duration: ").append(l.getDurationMinutes()).append("min");
+                if (l.getFeelLabel() != null) prompt.append(", Felt: ").append(l.getFeelLabel());
+                if (l.getMetrics() != null && !l.getMetrics().isEmpty()) {
+                    prompt.append(", Metrics: ").append(l.getMetrics().entrySet().stream()
+                            .map(e -> e.getKey() + "=" + DECIMAL_FORMAT.format(e.getValue()))
+                            .collect(Collectors.joining(", ")));
+                }
+                prompt.append("\n");
+            });
+            prompt.append("\n");
+        }
+
+        // PRs for this domain
+        List<PersonalRecordResponse> domainPrs = context.getPrs().stream()
+                .filter(pr -> pr.getDomainId() != null && pr.getDomainId().equals(domain.getId()))
+                .collect(Collectors.toList());
+        if (!domainPrs.isEmpty()) {
+            prompt.append("PERSONAL RECORDS:\n");
+            domainPrs.forEach(pr -> prompt.append("  - ").append(pr.getLabel()).append(": ")
+                    .append(DECIMAL_FORMAT.format(pr.getValue())).append(pr.getUnit()).append("\n"));
+            prompt.append("\n");
+        }
+
+        // Milestones for this domain
+        List<MilestoneResponse> domainMilestones = context.getMilestones().stream()
+                .filter(m -> m.getDomainId() != null && m.getDomainId().equals(domain.getId()))
+                .collect(Collectors.toList());
+        if (!domainMilestones.isEmpty()) {
+            prompt.append("ACTIVE MILESTONES:\n");
+            domainMilestones.forEach(m -> prompt.append("  - ").append(m.getLabel()).append(": ")
+                    .append(DECIMAL_FORMAT.format(m.getCurrentValue())).append("/").append(DECIMAL_FORMAT.format(m.getTargetValue()))
+                    .append(m.getUnit()).append(" (deadline: ").append(m.getDeadline()).append(")\n"));
+            prompt.append("\n");
+        }
+
+        // Weekly stats
+        List<WeeklyStatResponse> domainStats = context.getWeeklyStats().stream()
+                .filter(ws -> ws.getDomainId() != null && ws.getDomainId().equals(domain.getId()))
+                .collect(Collectors.toList());
+        if (!domainStats.isEmpty()) {
+            prompt.append("THIS WEEK'S STATS:\n");
+            domainStats.forEach(ws -> prompt.append("  - ").append(ws.getLabel()).append(": ")
+                    .append(DECIMAL_FORMAT.format(ws.getValue())).append(ws.getUnit())
+                    .append(ws.getTarget() != null ? " / target " + DECIMAL_FORMAT.format(ws.getTarget()) + ws.getUnit() : "")
+                    .append("\n"));
+            prompt.append("\n");
+        }
+
+        prompt.append("INSTRUCTIONS:\n");
+        prompt.append("- Generate tasks that build on the user's recent progress (progressive overload, next logical step).\n");
+        prompt.append("- Tasks should align with their weekly schedule days.\n");
+        prompt.append("- Due dates MUST be within the next 7 days, starting from tomorrow.\n");
+        prompt.append("- Each task should be specific and actionable (e.g. 'Bench press: aim for 3x8 at 82.5kg' not 'Do chest workout').\n");
+        prompt.append("- If the user has been feeling tired/rough, suggest lighter recovery sessions.\n");
+        prompt.append("- If streak is 0 or low, prioritize getting them back on track with achievable tasks.\n\n");
+
+        prompt.append("Output MUST be a valid JSON array:\n");
+        prompt.append("[\n");
+        prompt.append("  {\n");
+        prompt.append("    \"title\": \"string (concise, max 60 chars)\",\n");
+        prompt.append("    \"description\": \"string (1-2 sentences with specifics)\",\n");
+        prompt.append("    \"dueDate\": \"YYYY-MM-DD\"\n");
+        prompt.append("  }\n");
+        prompt.append("]\n");
+
         return prompt.toString();
     }
 
