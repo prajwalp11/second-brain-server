@@ -25,10 +25,12 @@ public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
     private final UserDetailsServiceImpl userDetailsService;
+    private final AuthRateLimitFilter authRateLimitFilter;
 
-    public SecurityConfig(JwtAuthFilter jwtAuthFilter, UserDetailsServiceImpl userDetailsService) {
+    public SecurityConfig(JwtAuthFilter jwtAuthFilter, UserDetailsServiceImpl userDetailsService, AuthRateLimitFilter authRateLimitFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
         this.userDetailsService = userDetailsService;
+        this.authRateLimitFilter = authRateLimitFilter;
     }
 
     @Bean
@@ -49,6 +51,7 @@ public class SecurityConfig {
                             response.getWriter().write("{\"error\": \"Token expired or invalid\"}");
                         })
                 )
+                .addFilterBefore(authRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
