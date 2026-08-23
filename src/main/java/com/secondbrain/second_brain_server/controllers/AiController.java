@@ -16,6 +16,7 @@ import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -57,5 +58,11 @@ public class AiController {
     public ResponseEntity<Void> markNudgeRead(@PathVariable UUID nudgeId, @CurrentUser UUID userId) {
         aiNudgeService.markNudgeRead(nudgeId, userId);
         return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/remaining")
+    public ResponseEntity<Map<String, Integer>> getRemainingMessages(@CurrentUser UUID userId) {
+        int remaining = aiChatService.getRemainingMessages(userId);
+        return ResponseEntity.ok(Map.of("remaining", remaining));
     }
 }

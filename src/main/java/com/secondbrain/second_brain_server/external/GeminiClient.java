@@ -163,28 +163,39 @@ public class GeminiClient {
 
     private String retryOnRateLimit(Supplier<String> supplier) {
         int maxRetries = 3;
-        long delayMs = 1000; // 1 second
+        long delayMs = 2000; // Start at 2 seconds
 
         for (int i = 0; i < maxRetries; i++) {
             try {
                 return supplier.get();
             } catch (HttpClientErrorException.TooManyRequests e) {
-                log.warn("Gemini API rate limit hit. Retrying in {}ms...", delayMs);
-                try {
-                    TimeUnit.MILLISECONDS.sleep(delayMs);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    throw new AiServiceException("Retry interrupted", ie);
-                }
-                delayMs *= 2; // Exponential backoff
-            } catch (HttpClientErrorException | HttpServerErrorException e) {
-                log.error("Gemini API HTTP error: Status={}, Body={}", e.getStatusCode(), e.getResponseBodyAsString(), e);
-                throw new AiServiceException("Gemini API call failed: " + e.getMessage(), e);
+                log.warn("Gemini API rate limit (429). Attempt {}/{}. Retrying in {}ms...", i + 1, maxRetries, delayMs);
+                sleepOrThrow(delayMs);
+                delayMs *= 2;
+            } catch (HttpServerErrorException.ServiceUnavailable e) {
+                log.warn("Gemini API unavailable (503). Attempt {}/{}. Retrying in {}ms...", i + 1, maxRetries, delayMs);
+                sleepOrThrow(delayMs);
+                delayMs *= 2;
+            } catch (HttpServerErrorException e) {
+                log.error("Gemini API server error: Status={}, Body={}", e.getStatusCode(), e.getResponseBodyAsString());
+                throw new AiServiceException("Gemini API server error (" + e.getStatusCode() + "). Please try again later.", e);
+            } catch (HttpClientErrorException e) {
+                log.error("Gemini API client error: Status={}, Body={}", e.getStatusCode(), e.getResponseBodyAsString());
+                throw new AiServiceException("Gemini API request failed (" + e.getStatusCode() + "): " + e.getResponseBodyAsString(), e);
             } catch (Exception e) {
                 log.error("Unexpected error during Gemini API call", e);
-                throw new AiServiceException("Unexpected error during Gemini API call: " + e.getMessage(), e);
+                throw new AiServiceException("AI service temporarily unavailable. Please try again.", e);
             }
         }
-        throw new AiServiceException("Gemini API call failed after multiple retries due to rate limiting.");
+        throw new AiServiceException("AI service is experiencing high demand. Please try again in a few minutes.");
+    }
+
+    private void sleepOrThrow(long delayMs) {
+        try {
+            TimeUnit.MILLISECONDS.sleep(delayMs);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new AiServiceException("AI request was interrupted", ie);
+        }
     }
 }

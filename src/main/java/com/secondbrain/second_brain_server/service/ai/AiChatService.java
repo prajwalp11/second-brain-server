@@ -15,6 +15,7 @@ import com.secondbrain.second_brain_server.dto.response.AiConversationResponse;
 import com.secondbrain.second_brain_server.dto.response.AiMessageResponse;
 import com.secondbrain.second_brain_server.entities.AiConversation;
 import com.secondbrain.second_brain_server.entities.AiMessage;
+import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.entities.User;
 import com.secondbrain.second_brain_server.enums.MessageRole;
 import com.secondbrain.second_brain_server.exception.ResourceNotFoundException;
@@ -28,16 +29,16 @@ import com.secondbrain.second_brain_server.service.MilestoneService;
 import com.secondbrain.second_brain_server.service.TaskService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -45,6 +46,9 @@ import java.util.stream.Collectors;
 @Slf4j
 @RequiredArgsConstructor
 public class AiChatService {
+
+    @org.springframework.beans.factory.annotation.Value("${ai.chat.daily-message-limit:3}")
+    private int maxMessagesPerDay;
 
     private final GeminiClient geminiClient;
     private final PromptBuilder promptBuilder;
@@ -56,38 +60,78 @@ public class AiChatService {
     private final DomainService domainService;
     private final ObjectMapper objectMapper;
 
+    // ─── Chat ────────────────────────────────────────────────────────────────────
+
     @Transactional
     public AiChatResponse chat(UUID userId, AiChatRequest request) {
+        // 1. Rate limit check — 3 messages per user per day
+        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+        long todayCount = aiMessageRepository.countByUserIdAndRoleAndCreatedAtAfter(
+                userId, MessageRole.USER, startOfDay);
+
+        if (todayCount >= maxMessagesPerDay) {
+            return AiChatResponse.builder()
+                    .reply("You've reached your daily limit of " + maxMessagesPerDay + " AI questions. Come back tomorrow!")
+                    .conversationId(null)
+                    .proposedActions(List.of())
+                    .build();
+        }
+
+        // 2. Validate domain ownership
+        Domain domain = domainService.assertOwnership(request.getDomainId(), userId);
+        String domainName = domain.getCustomName() != null ? domain.getCustomName() : domain.getDomainType().name();
+
+        // 3. Resolve or create conversation
         AiConversation conversation = resolveOrCreateConversation(userId, request.getConversationId());
         conversation.setUpdatedAt(LocalDateTime.now());
 
-        UserContext userContext = contextAssembler.assemble(userId);
-        String systemPrompt = promptBuilder.chat(userContext);
+        // 4. Build domain-scoped context + strict prompt
+        UserContext userContext = contextAssembler.assembleForDomain(userId, request.getDomainId());
+        String systemPrompt = promptBuilder.chat(userContext, request.getChatMode(), domainName);
 
-        List<GeminiMessage> geminiMessages = aiMessageRepository.findByConversationIdOrderByCreatedAtAsc(conversation.getId()).stream()
-                .map(msg -> new GeminiMessage(msg.getRole().name().toLowerCase(), List.of(Map.of("text", msg.getContent()))))
+        // 5. Build conversation history for multi-turn
+        List<GeminiMessage> geminiMessages = aiMessageRepository
+                .findByConversationIdOrderByCreatedAtAsc(conversation.getId())
+                .stream()
+                .map(msg -> new GeminiMessage(
+                        msg.getRole().name().toLowerCase(),
+                        List.of(Map.of("text", msg.getContent()))))
                 .collect(Collectors.toList());
 
         // Add current user message
         geminiMessages.add(new GeminiMessage("user", List.of(Map.of("text", request.getMessage()))));
 
-        String rawAiResponse = geminiClient.completeWithJson(systemPrompt, geminiMessages);
+        // 6. Call Gemini
+        String rawAiResponse;
+        try {
+            rawAiResponse = geminiClient.completeWithJson(systemPrompt, geminiMessages);
+        } catch (Exception e) {
+            log.error("[AiChat] Gemini call failed for user {}: {}", userId, e.getMessage());
+            // Don't count this against the user's daily limit — persist nothing
+            return AiChatResponse.builder()
+                    .reply("AI is temporarily unavailable. Please try again in a moment. (Your question was not counted against your daily limit.)")
+                    .conversationId(conversation.getId())
+                    .proposedActions(List.of())
+                    .build();
+        }
 
+        // 7. Parse response
         String replyText;
         List<AiActionResponse> proposedActions = new ArrayList<>();
 
         try {
             JsonNode rootNode = objectMapper.readTree(rawAiResponse);
-            replyText = rootNode.path("reply").asText("I'm sorry, I couldn't process that.");
+            replyText = rootNode.path("reply").asText("I couldn't process that. Please try again.");
             JsonNode actionsNode = rootNode.path("proposedActions");
             if (actionsNode.isArray()) {
                 proposedActions = objectMapper.convertValue(actionsNode, new TypeReference<List<AiActionResponse>>() {});
             }
         } catch (JsonProcessingException e) {
             log.error("Failed to parse AI chat response JSON: {}", rawAiResponse, e);
-            replyText = "I'm sorry, I received an unparseable response from the AI.";
+            replyText = rawAiResponse; // Fallback: use raw text if not valid JSON
         }
 
+        // 8. Persist messages
         persistMessages(conversation, request.getMessage(), replyText);
 
         return AiChatResponse.builder()
@@ -96,6 +140,8 @@ public class AiChatService {
                 .proposedActions(proposedActions)
                 .build();
     }
+
+    // ─── Conversations ───────────────────────────────────────────────────────────
 
     public List<AiConversationResponse> getConversations(UUID userId) {
         return aiConversationRepository.findByUserIdOrderByUpdatedAtDesc(userId).stream()
@@ -121,6 +167,8 @@ public class AiChatService {
                 .collect(Collectors.toList());
     }
 
+    // ─── Apply Actions ───────────────────────────────────────────────────────────
+
     @Transactional
     public void applyAction(UUID userId, ApplyAiActionRequest request) {
         Map<String, Object> payload = request.getPayload();
@@ -144,7 +192,10 @@ public class AiChatService {
                 if (domainId == null) {
                     throw new ValidationException("ADJUST_PLAN requires a domainId in payload");
                 }
-                UpdateDomainRequest domainRequest = objectMapper.convertValue(payload, UpdateDomainRequest.class);
+                // Remove domainId from payload before converting to UpdateDomainRequest
+                Map<String, Object> planPayload = new HashMap<>(payload);
+                planPayload.remove("domainId");
+                UpdateDomainRequest domainRequest = objectMapper.convertValue(planPayload, UpdateDomainRequest.class);
                 domainService.updateDomain(domainId, userId, domainRequest);
                 log.info("AI Action applied: ADJUST_PLAN for user {}, domain {}", userId, domainId);
                 break;
@@ -153,6 +204,18 @@ public class AiChatService {
         }
     }
 
+    /**
+     * Returns remaining AI messages for the user today.
+     */
+    public int getRemainingMessages(UUID userId) {
+        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+        long todayCount = aiMessageRepository.countByUserIdAndRoleAndCreatedAtAfter(
+                userId, MessageRole.USER, startOfDay);
+        return Math.max(0, maxMessagesPerDay - (int) todayCount);
+    }
+
+    // ─── Private Helpers ─────────────────────────────────────────────────────────
+
     private AiConversation resolveOrCreateConversation(UUID userId, UUID conversationId) {
         if (conversationId != null) {
             return aiConversationRepository.findByIdAndUserId(conversationId, userId)
@@ -160,7 +223,7 @@ public class AiChatService {
         } else {
             AiConversation newConv = AiConversation.builder()
                     .user(new User(userId))
-                    .preview("New Chat") // Default preview, will be updated later
+                    .preview("New Chat")
                     .createdAt(LocalDateTime.now())
                     .updatedAt(LocalDateTime.now())
                     .build();
@@ -185,8 +248,8 @@ public class AiChatService {
                 .build();
         aiMessageRepository.save(aiReplyMessage);
 
-        // Update conversation preview
-        conv.setPreview(userMsg.substring(0, Math.min(userMsg.length(), 50)) + "...");
+        // Update conversation preview with first 50 chars of user message
+        conv.setPreview(userMsg.length() > 50 ? userMsg.substring(0, 50) + "..." : userMsg);
         aiConversationRepository.save(conv);
     }
 }

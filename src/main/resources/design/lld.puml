@@ -303,6 +303,10 @@ package "enums" {
     ASSISTANT
     SYSTEM
   }
+  enum ChatMode {
+    ADJUST_PLAN
+    DATA_QUERY
+  }
 }
 
 ' ============================================================
@@ -381,6 +385,8 @@ package "dto_request" {
   class AiChatRequest {
     + message : String <<NotBlank>>
     + conversationId : UUID
+    + domainId : UUID <<NotNull>>
+    + chatMode : ChatMode <<NotNull>>
   }
   class ApplyAiActionRequest {
     + actionType : String <<NotBlank>>
@@ -654,6 +660,7 @@ package "repositories" {
   interface AiMessageRepository {
     + findByConversationIdOrderByCreatedAtAsc(conversationId: UUID) : List<AiMessage>
     + findTop20ByConversationIdOrderByCreatedAtDesc(conversationId: UUID) : List<AiMessage>
+    + countByUserIdAndRoleAndCreatedAtAfter(userId: UUID, role: MessageRole, since: LocalDateTime) : long
   }
   
   
@@ -902,10 +909,28 @@ package "service.ai" {
     + getConversations(userId: UUID) : List<AiConversationDto>
     + getMessages(conversationId: UUID, userId: UUID) : List<AiMessageDto>
     + applyAction(userId: UUID, request: ApplyAiActionRequest) : void
+    + getRemainingMessages(userId: UUID) : int
     - resolveOrCreateConversation(userId: UUID, conversationId: UUID) : AiConversation
     - persistMessages(conv: AiConversation, userMsg: String, reply: String) : void
-    - parseProposedActions(reply: String) : List<AiActionDto>
   }
+  note right of AiChatService
+    chat() flow:
+    1. Rate limit: 3 msgs/user/day
+       (count USER msgs since midnight)
+    2. Validate domain ownership
+    3. assembleForDomain() — scoped context
+    4. promptBuilder.chat(ctx, mode, name)
+       → strict domain-only system prompt
+    5. Gemini call with conversation history
+    6. Parse JSON response + proposedActions
+    7. Persist messages
+
+    Enforcement layers:
+    - UI forces domain + mode selection
+    - Server scopes context to 1 domain
+    - System prompt refuses off-topic
+    - 3/day limit prevents abuse
+  end note
   class AiNudgeService {
     - geminiClient : GeminiClient
     - promptBuilder : PromptBuilder
@@ -948,10 +973,19 @@ package "service.ai" {
     + systemGenerator(type: DomainType, level: SkillLevel, url: String) : String
     + sessionInsight(log: SessionLog, recentLogs: List<SessionLog>, prs: List<PersonalRecordDto>) : String
     + nudge(domain: Domain, logs: List<SessionLog>, type: NudgeType) : String
-    + chat(context: UserContext) : String
+    + chat(context: UserContext, chatMode: ChatMode, domainName: String) : String
     + taskGeneration(context: UserContext, domain: Domain) : String
     + weeklyInsight(stats: List<WeeklyStatDto>, prs: List<PersonalRecordDto>) : String
   }
+  note right of PromptBuilder
+    chat() builds strict domain-scoped prompt:
+    - ADJUST_PLAN: instructs AI to propose
+      actions (ADJUST_PLAN, ADD_TASK, SET_MILESTONE)
+    - DATA_QUERY: Q&A only, no actions
+    - Both modes refuse off-topic questions
+    - Full domain data injected (logs, PRs,
+      milestones, tasks, streaks, weekly stats)
+  end note
   class TaskGenerationService {
     - domainRepository : DomainRepository
     - taskRepository : TaskRepository
@@ -1113,6 +1147,7 @@ package "controllers" {
     + applyAction(request: ApplyAiActionRequest) : ResponseEntity<Void>
     + getNudge() : ResponseEntity<AiNudgeDto>
     + markNudgeRead(nudgeId: UUID) : ResponseEntity<Void>
+    + getRemainingMessages() : ResponseEntity<Map<String, Integer>>
   }
   class UserController {
     - authService : AuthService
