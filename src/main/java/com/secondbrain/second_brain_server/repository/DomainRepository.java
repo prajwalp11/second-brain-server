@@ -22,4 +22,6 @@ public interface DomainRepository extends JpaRepository<Domain, UUID> {
 
     @Query("SELECT d FROM Domain d WHERE d.status = 'ACTIVE' AND d.lastLogDate < :today")
     List<Domain> findAllActiveForStreakCheck(LocalDate today);
+
+    List<Domain> findAllByStatus(DomainStatus status);
 }

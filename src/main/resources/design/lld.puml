@@ -591,6 +591,7 @@ package "repositories" {
     + findByUserIdAndStatus(userId: UUID, status: DomainStatus) : List<Domain>
     + existsByUserIdAndDomainType(userId: UUID, type: DomainType) : boolean
     + findAllActiveForStreakCheck(today: LocalDate) : List<Domain>
+    + findAllByStatus(status: DomainStatus) : List<Domain>
   }
   interface DomainMetricDefinitionRepository {
     + findByDomainIdOrderByDisplayOrder(domainId: UUID) : List<DomainMetricDefinition>
@@ -683,6 +684,7 @@ package "services" {
     - metricDefinitionRepository : DomainMetricDefinitionRepository
     - milestoneRepository : MilestoneRepository
     - taskRepository : TaskRepository
+    - sessionLogRepository : SessionLogRepository
     - aiSystemGeneratorService : AiSystemGeneratorService
     --
     + getDomainsForUser(userId: UUID) : List<DomainDto>
@@ -693,11 +695,20 @@ package "services" {
     + archiveDomain(domainId: UUID, userId: UUID) : void
     + generateAndApplySystem(domainId: UUID, userId: UUID) : GeneratedSystemDto
     + updateStreakForDomain(domain: Domain, logDate: LocalDate) : void
+    + recalculateAllStreaksForUser(userId: UUID) : void
     + validateMetricKeys(domainId: UUID, submittedKeys: Set<String>) : void
     - applyGeneratedSystem(domain: Domain, generated: GeneratedSystemDto) : void
     - assertOwnership(domainId: UUID, userId: UUID) : Domain
   }
   note right of DomainService
+    updateStreakForDomain() uses
+    StreakCalculator.compute() to walk
+    backwards through log dates vs
+    scheduled days. No longer does
+    naive currentStreak + 1.
+    recalculateAllStreaksForUser()
+    recalculates all active domains
+    for a user — called by manual API.
     validateMetricKeys() called by
     SessionLogService before every save.
     Throws ValidationException if any
@@ -1051,6 +1062,7 @@ package "controllers" {
     + pauseDomain(domainId: UUID) : ResponseEntity<Void>
     + archiveDomain(domainId: UUID) : ResponseEntity<Void>
     + generateSystem(domainId: UUID) : ResponseEntity<GeneratedSystemDto>
+    + recalculateStreaks() : ResponseEntity<Void>
   }
   class SessionLogController {
     - sessionLogService : SessionLogService
@@ -1257,6 +1269,13 @@ package "scheduler" {
     --
     + runMidnight() : void
   }
+  note right of StreakCheckScheduler
+    Runs daily at midnight.
+    Recalculates streaks for ALL
+    active domains (not just at-risk).
+    Catches broken streaks so dashboard
+    shows correct values next morning.
+  end note
   class DailyTaskGenerationScheduler {
     - userRepository : UserRepository
     - taskGenerationService : TaskGenerationService

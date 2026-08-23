@@ -400,6 +400,31 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Recalculate Streaks",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/domains/streaks/recalculate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "domains",
+                "streaks",
+                "recalculate"
+              ]
+            }
+          },
+          "response": []
         }
       ]
     },

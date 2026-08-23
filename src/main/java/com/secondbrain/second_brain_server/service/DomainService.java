@@ -26,6 +26,7 @@ import com.secondbrain.second_brain_server.repository.SessionLogRepository;
 import com.secondbrain.second_brain_server.repository.TaskRepository;
 import com.secondbrain.second_brain_server.service.ai.AiSystemGeneratorService;
 import com.secondbrain.second_brain_server.util.MetricValidator;
+import com.secondbrain.second_brain_server.util.StreakCalculator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -159,19 +160,50 @@ public class DomainService {
 
     @Transactional
     public void updateStreakForDomain(Domain domain, LocalDate logDate) {
+        // Update lastLogDate if this is the most recent log
         if (domain.getLastLogDate() == null || logDate.isAfter(domain.getLastLogDate())) {
             domain.setLastLogDate(logDate);
-            domain.setCurrentStreak(domain.getCurrentStreak() + 1);
-            if (domain.getCurrentStreak() > domain.getLongestStreak()) {
-                domain.setLongestStreak(domain.getCurrentStreak());
-            }
-        } else if (logDate.isBefore(domain.getLastLogDate())) {
-            // Logged for a past date, no change to current streak
-        } else {
-            // No change
         }
+
+        // Recalculate streak properly using all log dates + schedule
+        List<LocalDate> logDates = sessionLogRepository.findLogDatesByDomainId(domain.getId());
+        if (!logDates.contains(logDate)) {
+            logDates.add(logDate);
+        }
+        java.util.Collections.sort(logDates);
+
+        Integer currentStreak = StreakCalculator.compute(logDates, domain.getWeeklySchedule(), LocalDate.now());
+        domain.setCurrentStreak(currentStreak);
+        if (currentStreak > domain.getLongestStreak()) {
+            domain.setLongestStreak(currentStreak);
+        }
+
         domain.setUpdatedAt(LocalDateTime.now());
         domainRepository.save(domain);
+    }
+
+    /**
+     * Recalculates streaks for all active domains of a user.
+     * Called by the manual API endpoint.
+     */
+    @Transactional
+    public void recalculateAllStreaksForUser(UUID userId) {
+        List<Domain> activeDomains = domainRepository.findByUserIdAndStatus(userId, DomainStatus.ACTIVE);
+        for (Domain domain : activeDomains) {
+            List<LocalDate> logDates = sessionLogRepository.findLogDatesByDomainId(domain.getId());
+            java.util.Collections.sort(logDates);
+
+            Integer currentStreak = StreakCalculator.compute(logDates, domain.getWeeklySchedule(), LocalDate.now());
+            domain.setCurrentStreak(currentStreak);
+            if (currentStreak > domain.getLongestStreak()) {
+                domain.setLongestStreak(currentStreak);
+            }
+            if (!logDates.isEmpty()) {
+                domain.setLastLogDate(logDates.get(logDates.size() - 1));
+            }
+            domain.setUpdatedAt(LocalDateTime.now());
+            domainRepository.save(domain);
+        }
     }
 
     public void validateMetricKeys(UUID domainId, Set<String> submittedKeys) {

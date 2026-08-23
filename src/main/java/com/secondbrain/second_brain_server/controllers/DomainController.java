@@ -74,4 +74,14 @@ public class DomainController {
     public ResponseEntity<GeneratedSystemResponse> generateSystem(@PathVariable UUID domainId, @CurrentUser UUID userId) {
         return ResponseEntity.ok(domainService.generateAndApplySystem(domainId, userId));
     }
+
+    /**
+     * Manually trigger streak recalculation for all active domains of the current user.
+     * Useful when streaks appear stale or incorrect.
+     */
+    @PostMapping("/streaks/recalculate")
+    public ResponseEntity<Void> recalculateStreaks(@CurrentUser UUID userId) {
+        domainService.recalculateAllStreaksForUser(userId);
+        return ResponseEntity.ok().build();
+    }
 }
