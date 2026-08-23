@@ -62,7 +62,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
 
         if (window.count.get() > MAX_ATTEMPTS) {
             log.warn("Rate limit exceeded for IP: {} on {}", ip, path);
-            response.setStatus(HttpServletResponse.SC_TOO_MANY_REQUESTS);
+            response.setStatus(429);
             response.setContentType("application/json");
             response.getWriter().write(
                     "{\"status\":429,\"message\":\"Too many attempts. Please try again in 15 minutes.\"}");
