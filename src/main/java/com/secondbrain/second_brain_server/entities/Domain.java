@@ -47,10 +47,6 @@ public class Domain {
 
     private String weeklySchedule;
 
-    private String linkedResourceUrl;
-
-    private String linkedResourceTitle;
-
     private Integer currentStreak;
 
     private Integer longestStreak;
@@ -103,8 +99,6 @@ public class Domain {
                 .status(this.status)
                 .planDescription(this.planDescription)
                 .weeklySchedule(this.weeklySchedule)
-                .linkedResourceUrl(this.linkedResourceUrl)
-                .linkedResourceTitle(this.linkedResourceTitle)
                 .currentStreak(this.currentStreak)
                 .longestStreak(this.longestStreak)
                 .lastLogDate(this.lastLogDate)

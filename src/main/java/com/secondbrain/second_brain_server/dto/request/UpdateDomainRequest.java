@@ -17,6 +17,5 @@ public class UpdateDomainRequest {
     private SkillLevel skillLevel;
     private String planDescription;
     private String weeklySchedule;
-    private String linkedResourceUrl;
     private DomainStatus status;
 }

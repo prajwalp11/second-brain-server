@@ -19,6 +19,4 @@ public class CreateDomainRequest {
 
     @NotNull
     private SkillLevel skillLevel;
-
-    private String linkedResourceUrl;
 }

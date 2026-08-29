@@ -189,6 +189,8 @@ package "entities" {
     - completedAt : LocalDateTime
     - progress : Integer
     - aiGenerated : boolean
+    - linkedResourceUrl : String
+    - linkedResourceTitle : String
     - createdAt : LocalDateTime
     --
     + toDto() : TaskDto
@@ -490,6 +492,8 @@ package "dto_response" {
     + dueDate : LocalDate
     + progress : Integer
     + aiGenerated : boolean
+    + linkedResourceUrl : String
+    + linkedResourceTitle : String
   }
   class DashboardResponse {
     + greeting : String

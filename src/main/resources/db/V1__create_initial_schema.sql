@@ -275,3 +275,16 @@ CREATE INDEX idx_ai_nudges_user ON ai_nudges(user_id);
 CREATE UNIQUE INDEX uq_domain_user_custom_name
     ON domains (user_id, custom_name)
     WHERE domain_type = 'CUSTOM';
+
+
+-- ============================================
+-- ALTER: Add resource link fields to tasks
+-- ============================================
+ALTER TABLE tasks ADD COLUMN linked_resource_url VARCHAR(500);
+ALTER TABLE tasks ADD COLUMN linked_resource_title VARCHAR(255);
+
+-- ============================================
+-- ALTER: Remove resource link fields from domains (moved to task level)
+-- ============================================
+ALTER TABLE domains DROP COLUMN IF EXISTS linked_resource_url;
+ALTER TABLE domains DROP COLUMN IF EXISTS linked_resource_title;

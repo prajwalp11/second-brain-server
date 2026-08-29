@@ -24,8 +24,6 @@ public class DomainResponse {
     private DomainStatus status;
     private String planDescription;
     private String weeklySchedule;
-    private String linkedResourceUrl;
-    private String linkedResourceTitle;
     private Integer currentStreak;
     private Integer longestStreak;
     private LocalDate lastLogDate;

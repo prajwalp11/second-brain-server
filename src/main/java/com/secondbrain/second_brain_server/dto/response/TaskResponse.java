@@ -23,6 +23,8 @@ public class TaskResponse {
     private Integer progress;
     private boolean aiGenerated;
     private Long daysRemaining;
+    private String linkedResourceUrl;
+    private String linkedResourceTitle;
 
     public TaskResponse(Task task) {
         this.id = task.getId();
@@ -33,5 +35,7 @@ public class TaskResponse {
         this.dueDate = task.getDueDate();
         this.progress = task.getProgress();
         this.aiGenerated = task.isAiGenerated();
+        this.linkedResourceUrl = task.getLinkedResourceUrl();
+        this.linkedResourceTitle = task.getLinkedResourceTitle();
     }
 }

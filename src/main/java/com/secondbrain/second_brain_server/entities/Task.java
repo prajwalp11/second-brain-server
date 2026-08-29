@@ -46,6 +46,10 @@ public class Task {
 
     private boolean aiGenerated;
 
+    private String linkedResourceUrl;
+
+    private String linkedResourceTitle;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
@@ -70,6 +74,8 @@ public class Task {
                 .dueDate(this.dueDate)
                 .progress(this.progress)
                 .aiGenerated(this.aiGenerated)
+                .linkedResourceUrl(this.linkedResourceUrl)
+                .linkedResourceTitle(this.linkedResourceTitle)
                 .build();
     }
 }

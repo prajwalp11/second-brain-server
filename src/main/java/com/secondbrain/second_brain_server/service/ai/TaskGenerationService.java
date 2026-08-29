@@ -34,6 +34,7 @@ public class TaskGenerationService {
     private final PromptBuilder promptBuilder;
     private final GeminiClient geminiClient;
     private final ObjectMapper objectMapper;
+    private final com.secondbrain.second_brain_server.external.YouTubeService youTubeService;
 
     /**
      * Generate tasks for all active domains of a user that have no pending tasks.
@@ -101,8 +102,11 @@ public class TaskGenerationService {
         }
 
         // Save tasks
+        String domainName = domain.getCustomName() != null ? domain.getCustomName() : domain.getDomainType().name();
         List<Task> newTasks = generatedTasks.stream()
-                .map(gt -> Task.builder()
+                .map(gt -> {
+                    var video = youTubeService.findVideo(gt.title, domainName);
+                    return Task.builder()
                         .user(domain.getUser())
                         .domain(domain)
                         .title(gt.title)
@@ -110,8 +114,11 @@ public class TaskGenerationService {
                         .status(TaskStatus.TODO)
                         .dueDate(gt.dueDate)
                         .aiGenerated(true)
+                        .linkedResourceUrl(video.url())
+                        .linkedResourceTitle(video.title())
                         .createdAt(LocalDateTime.now())
-                        .build())
+                        .build();
+                })
                 .collect(Collectors.toList());
 
         taskRepository.saveAll(newTasks);

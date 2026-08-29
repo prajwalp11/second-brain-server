@@ -30,10 +30,14 @@ public class TaskService {
 
     private final TaskRepository taskRepository;
     private final DomainService domainService;
+    private final com.secondbrain.second_brain_server.external.YouTubeService youTubeService;
 
     @Transactional
     public TaskResponse createTask(UUID userId, CreateTaskRequest request) {
         Domain domain = domainService.assertOwnership(request.getDomainId(), userId);
+
+        String domainName = domain.getCustomName() != null ? domain.getCustomName() : domain.getDomainType().name();
+        var video = youTubeService.findVideo(request.getTitle(), domainName);
 
         Task newTask = Task.builder()
                 .user(new User(userId))
@@ -43,6 +47,8 @@ public class TaskService {
                 .status(TaskStatus.TODO)
                 .dueDate(request.getDueDate())
                 .aiGenerated(false)
+                .linkedResourceUrl(video.url())
+                .linkedResourceTitle(video.title())
                 .createdAt(LocalDateTime.now())
                 .build();
 

@@ -61,8 +61,6 @@ public class PromptBuilder {
         prompt.append("      \"deadline\": \"YYYY-MM-DD\"\n");
         prompt.append("    }\n");
         prompt.append("  ],\n");
-        prompt.append("  \"linkedResourceUrl\": \"string\",\n");
-        prompt.append("  \"linkedResourceTitle\": \"string\",\n");
         prompt.append("  \"tasks\": [\n");
         prompt.append("    {\n");
         prompt.append("      \"title\": \"string\",\n");
@@ -77,9 +75,7 @@ public class PromptBuilder {
         prompt.append("- All deadlines and due dates MUST be in the future relative to today's date.\n");
         prompt.append("- For metrics, provide at least 3-5 relevant metrics.\n");
         prompt.append("- For milestones, provide 2-3 achievable milestones with realistic deadlines.\n");
-        prompt.append("- For tasks, provide 2-3 initial tasks with due dates in the next 1-2 weeks.\n");
-        prompt.append("- For linkedResourceUrl: Find and provide a REAL, high-quality resource URL (YouTube tutorial, official guide, reputable website) that is appropriate for the user's skill level and domain. Do NOT use the user's provided URL if it looks invalid or placeholder-like.\n");
-        prompt.append("- For linkedResourceTitle: Provide the actual title of the linked resource.\n\n");
+        prompt.append("- For tasks, provide 2-3 initial tasks with due dates in the next 1-2 weeks.\n\n");
         prompt.append("User Input:\n");
         prompt.append("Domain Type: ").append(type).append("\n");
         prompt.append("Skill Level: ").append(level).append("\n");
@@ -207,9 +203,6 @@ public class PromptBuilder {
             prompt.append("  Status: ").append(domain.getStatus()).append("\n");
             prompt.append("  Plan: ").append(domain.getPlanDescription() != null ? domain.getPlanDescription() : "None").append("\n");
             prompt.append("  Schedule: ").append(domain.getWeeklySchedule() != null ? domain.getWeeklySchedule() : "Not set").append("\n");
-            if (domain.getLinkedResourceUrl() != null) {
-                prompt.append("  Resource: ").append(domain.getLinkedResourceUrl()).append("\n");
-            }
         }
 
         // Streaks
@@ -290,6 +283,7 @@ public class PromptBuilder {
         prompt.append("═══ END OF DATA ═══\n");
         prompt.append("Today's date: ").append(LocalDate.now().format(DATE_FORMATTER)).append("\n");
         prompt.append("User's name: ").append(context.getUserName()).append("\n");
+        prompt.append("IMPORTANT: When the user says 'starting today' or 'from today', set at least one task's dueDate to TODAY's date (").append(LocalDate.now().format(DATE_FORMATTER)).append("). Do NOT push all tasks to future days if the user explicitly wants to start now.\n");
         prompt.append("Respond naturally but ONLY about the data above. User's message will follow.\n");
 
         return prompt.toString();

@@ -68,12 +68,12 @@ public class ExportService {
 
         List<Domain> domains = domainRepository.findByUserId(userId);
         writer.println("Domains");
-        writer.println("id,domainType,customName,skillLevel,status,planDescription,weeklySchedule,linkedResourceUrl,linkedResourceTitle,currentStreak,longestStreak,lastLogDate,createdAt,updatedAt");
-        domains.forEach(d -> writer.printf("%s,%s,%s,%s,%s,%s,%s,%s,%s,%d,%d,%s,%s,%s\n",
+        writer.println("id,domainType,customName,skillLevel,status,planDescription,weeklySchedule,currentStreak,longestStreak,lastLogDate,createdAt,updatedAt");
+        domains.forEach(d -> writer.printf("%s,%s,%s,%s,%s,%s,%s,%d,%d,%s,%s,%s\n",
                 d.getId(), d.getDomainType(), d.getCustomName(), d.getSkillLevel(), d.getStatus(),
                 d.getPlanDescription() != null ? d.getPlanDescription().replace(",", ";") : "",
                 d.getWeeklySchedule() != null ? d.getWeeklySchedule().replace(",", ";") : "",
-                d.getLinkedResourceUrl(), d.getLinkedResourceTitle(), d.getCurrentStreak(), d.getLongestStreak(),
+                d.getCurrentStreak(), d.getLongestStreak(),
                 d.getLastLogDate(), d.getCreatedAt(), d.getUpdatedAt()));
         writer.println();
 

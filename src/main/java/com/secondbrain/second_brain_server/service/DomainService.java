@@ -51,6 +51,7 @@ public class DomainService {
     private final SessionLogRepository sessionLogRepository;
     private final TaskRepository taskRepository;
     private final AiSystemGeneratorService aiSystemGeneratorService;
+    private final com.secondbrain.second_brain_server.external.YouTubeService youTubeService;
 
     public List<DomainResponse> getDomainsForUser(UUID userId) {
         return domainRepository.findByUserId(userId).stream()
@@ -93,7 +94,6 @@ public class DomainService {
                 .longestStreak(0)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
-                .linkedResourceUrl(request.getLinkedResourceUrl())
                 .build();
 
         Domain savedDomain = domainRepository.save(newDomain);
@@ -105,7 +105,7 @@ public class DomainService {
                 .collect(Collectors.toList());
 
         GeneratedSystemResponse generatedSystem = aiSystemGeneratorService.generateSystem(
-                request.getDomainType(), request.getSkillLevel(), request.getLinkedResourceUrl(), request.getCustomName(), existingSchedules);
+                request.getDomainType(), request.getSkillLevel(), null, request.getCustomName(), existingSchedules);
         applyGeneratedSystem(savedDomain, generatedSystem);
 
         return savedDomain.toResponse();
@@ -119,7 +119,6 @@ public class DomainService {
         Optional.ofNullable(request.getSkillLevel()).ifPresent(domain::setSkillLevel);
         Optional.ofNullable(request.getPlanDescription()).ifPresent(domain::setPlanDescription);
         Optional.ofNullable(request.getWeeklySchedule()).ifPresent(domain::setWeeklySchedule);
-        Optional.ofNullable(request.getLinkedResourceUrl()).ifPresent(domain::setLinkedResourceUrl);
         Optional.ofNullable(request.getStatus()).ifPresent(domain::setStatus);
         domain.setUpdatedAt(LocalDateTime.now());
 
@@ -216,8 +215,6 @@ public class DomainService {
     private void applyGeneratedSystem(Domain domain, GeneratedSystemResponse generated) {
         Optional.ofNullable(generated.getPlanDescription()).ifPresent(domain::setPlanDescription);
         Optional.ofNullable(generated.getWeeklySchedule()).ifPresent(domain::setWeeklySchedule);
-        Optional.ofNullable(generated.getLinkedResourceUrl()).ifPresent(domain::setLinkedResourceUrl);
-        Optional.ofNullable(generated.getLinkedResourceTitle()).ifPresent(domain::setLinkedResourceTitle);
         domain.setUpdatedAt(LocalDateTime.now());
         domainRepository.save(domain);
 
@@ -259,8 +256,11 @@ public class DomainService {
         }
 
         if (generated.getTasks() != null) {
+            String domainName = domain.getCustomName() != null ? domain.getCustomName() : domain.getDomainType().name();
             List<Task> tasks = generated.getTasks().stream()
-                    .map(dto -> Task.builder()
+                    .map(dto -> {
+                        var video = youTubeService.findVideo(dto.getTitle(), domainName);
+                        return Task.builder()
                             .user(domain.getUser())
                             .domain(domain)
                             .title(dto.getTitle())
@@ -268,11 +268,22 @@ public class DomainService {
                             .status(TaskStatus.TODO)
                             .dueDate(dto.getDueDate())
                             .aiGenerated(true)
+                            .linkedResourceUrl(video.url())
+                            .linkedResourceTitle(video.title())
                             .createdAt(LocalDateTime.now())
-                            .build())
+                            .build();
+                    })
                     .collect(Collectors.toList());
             taskRepository.saveAll(tasks);
         }
+    }
+
+    private String buildYouTubeSearchQuery(String taskTitle, String domainName) {
+        String query = (taskTitle + " " + domainName + " tutorial")
+                .replaceAll("[^a-zA-Z0-9\\s]", "")
+                .trim()
+                .replaceAll("\\s+", "+");
+        return "https://www.youtube.com/results?search_query=" + query;
     }
 
     public Domain assertOwnership(UUID domainId, UUID userId) {

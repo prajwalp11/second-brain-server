@@ -34,29 +34,27 @@ public class AiSystemGeneratorService {
             return parseResponse(rawResponse);
         } catch (AiServiceException e) {
             log.error("AI service failed, using fallback system for {} at {} level", type, level, e);
-            return createFallbackSystem(type, level, linkedUrl, customName);
+            return createFallbackSystem(type, level, customName);
         }
     }
 
     public GeneratedSystemResponse regenerateSystem(Domain domain) {
         try {
-            String systemPrompt = promptBuilder.systemGenerator(domain.getDomainType(), domain.getSkillLevel(), domain.getLinkedResourceUrl(), domain.getCustomName(), null);
+            String systemPrompt = promptBuilder.systemGenerator(domain.getDomainType(), domain.getSkillLevel(), null, domain.getCustomName(), null);
             List<GeminiMessage> messages = List.of(new GeminiMessage("user", List.of(Map.of("text", "Regenerate the system based on the current domain details."))));
             String rawResponse = geminiClient.completeWithJson(systemPrompt, messages);
             return parseResponse(rawResponse);
         } catch (AiServiceException e) {
             log.error("AI service failed, using fallback system for domain {}", domain.getId(), e);
-            return createFallbackSystem(domain.getDomainType(), domain.getSkillLevel(), domain.getLinkedResourceUrl(), domain.getCustomName());
+            return createFallbackSystem(domain.getDomainType(), domain.getSkillLevel(), domain.getCustomName());
         }
     }
 
-    private GeneratedSystemResponse createFallbackSystem(DomainType type, SkillLevel level, String linkedUrl, String customName) {
+    private GeneratedSystemResponse createFallbackSystem(DomainType type, SkillLevel level, String customName) {
         String displayName = (type == DomainType.CUSTOM && customName != null) ? customName : type.name().toLowerCase();
         return GeneratedSystemResponse.builder()
                 .planDescription("Welcome to your " + displayName + " journey! Start by setting a consistent schedule and tracking your progress.")
                 .weeklySchedule("Mon,Tue,Wed,Thu,Fri,Sat,Sun")
-                .linkedResourceUrl(linkedUrl)
-                .linkedResourceTitle(linkedUrl != null ? "Resource" : null)
                 .metrics(List.of())
                 .milestones(List.of())
                 .tasks(List.of())

@@ -17,7 +17,5 @@ public class GeneratedSystemResponse {
     private String weeklySchedule;
     private List<MetricDefinitionResponse> metrics;
     private List<MilestoneResponse> milestones;
-    private String linkedResourceUrl;
-    private String linkedResourceTitle;
     private List<TaskResponse> tasks;
 }
