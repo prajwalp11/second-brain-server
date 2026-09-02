@@ -13,6 +13,8 @@ CREATE TABLE users (
                        password VARCHAR(255),
                        first_name VARCHAR(255),
                        last_name VARCHAR(255),
+                       ai_daily_limit INT DEFAULT 3,
+                       ai_used_today INT DEFAULT 0,
                        created_at TIMESTAMP DEFAULT NOW(),
                        updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -288,3 +290,26 @@ ALTER TABLE tasks ADD COLUMN linked_resource_title VARCHAR(255);
 -- ============================================
 ALTER TABLE domains DROP COLUMN IF EXISTS linked_resource_url;
 ALTER TABLE domains DROP COLUMN IF EXISTS linked_resource_title;
+
+-- ============================================
+-- ALTER: Add per-user AI daily limit tracking
+-- ============================================
+ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_daily_limit INT DEFAULT 3;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_used_today INT DEFAULT 0;
+
+
+-- ============================================
+-- JOB EXECUTION LOGS (scheduler/cron audit trail)
+-- ============================================
+CREATE TABLE IF NOT EXISTS job_execution_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    job_name VARCHAR(100) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    started_at TIMESTAMP NOT NULL,
+    finished_at TIMESTAMP,
+    error_message TEXT,
+    details VARCHAR(500),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_job_logs_name_date ON job_execution_logs(job_name, started_at);

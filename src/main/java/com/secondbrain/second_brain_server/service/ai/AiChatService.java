@@ -47,9 +47,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AiChatService {
 
-    @org.springframework.beans.factory.annotation.Value("${ai.chat.daily-message-limit:3}")
-    private int maxMessagesPerDay;
-
     private final GeminiClient geminiClient;
     private final PromptBuilder promptBuilder;
     private final UserContextAssembler contextAssembler;
@@ -59,19 +56,22 @@ public class AiChatService {
     private final MilestoneService milestoneService;
     private final DomainService domainService;
     private final ObjectMapper objectMapper;
+    private final com.secondbrain.second_brain_server.repository.UserRepository userRepository;
 
     // ─── Chat ────────────────────────────────────────────────────────────────────
 
     @Transactional
     public AiChatResponse chat(UUID userId, AiChatRequest request) {
-        // 1. Rate limit check — 3 messages per user per day
-        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
-        long todayCount = aiMessageRepository.countByUserIdAndRoleAndCreatedAtAfter(
-                userId, MessageRole.USER, startOfDay);
+        // 1. Rate limit check — per-user daily limit from DB
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
 
-        if (todayCount >= maxMessagesPerDay) {
+        int limit = user.getAiDailyLimit() != null ? user.getAiDailyLimit() : 3;
+        int used = user.getAiUsedToday() != null ? user.getAiUsedToday() : 0;
+
+        if (used >= limit) {
             return AiChatResponse.builder()
-                    .reply("You've reached your daily limit of " + maxMessagesPerDay + " AI questions. Come back tomorrow!")
+                    .reply("You've reached your daily limit of " + limit + " AI questions. Come back tomorrow!")
                     .conversationId(null)
                     .proposedActions(List.of())
                     .build();
@@ -133,6 +133,10 @@ public class AiChatService {
 
         // 8. Persist messages
         persistMessages(conversation, request.getMessage(), replyText);
+
+        // 9. Increment the user's daily AI usage counter (only on success)
+        user.setAiUsedToday(used + 1);
+        userRepository.save(user);
 
         return AiChatResponse.builder()
                 .reply(replyText)
@@ -205,13 +209,14 @@ public class AiChatService {
     }
 
     /**
-     * Returns remaining AI messages for the user today.
+     * Returns remaining AI messages for the user today (from per-user DB counters).
      */
     public int getRemainingMessages(UUID userId) {
-        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
-        long todayCount = aiMessageRepository.countByUserIdAndRoleAndCreatedAtAfter(
-                userId, MessageRole.USER, startOfDay);
-        return Math.max(0, maxMessagesPerDay - (int) todayCount);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+        int limit = user.getAiDailyLimit() != null ? user.getAiDailyLimit() : 3;
+        int used = user.getAiUsedToday() != null ? user.getAiUsedToday() : 0;
+        return Math.max(0, limit - used);
     }
 
     // ─── Private Helpers ─────────────────────────────────────────────────────────

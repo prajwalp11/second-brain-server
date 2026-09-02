@@ -26,11 +26,29 @@ package "entities" {
     
     - profilePictureUrl : String
     - timezone : String
+    - aiDailyLimit : Integer
+    - aiUsedToday : Integer
     - createdAt : LocalDateTime
     - updatedAt : LocalDateTime
     --
     + toDto() : UserDto
   }
+
+  class JobExecutionLog {
+    - id : UUID <<PK>>
+    - jobName : String
+    - status : String
+    - startedAt : LocalDateTime
+    - finishedAt : LocalDateTime
+    - errorMessage : String
+    - details : String
+    - createdAt : LocalDateTime
+  }
+  note right of JobExecutionLog
+    Audit trail — one row per scheduled
+    job run (SUCCESS/FAILED + exception).
+    Written by JobLogService wrapper.
+  end note
 
   class Domain {
     - id : UUID <<PK>>
@@ -862,6 +880,21 @@ package "services" {
     + exportAsJson(userId: UUID) : String
     + exportAsCsv(userId: UUID) : byte[]
   }
+
+  class JobLogService {
+    - jobExecutionLogRepository : JobExecutionLogRepository
+    --
+    + run(jobName: String, task: Supplier<String>) : void
+    + run(jobName: String, task: Runnable) : void
+  }
+  note right of JobLogService
+    Wraps a scheduled job: records
+    started/finished timestamps, catches
+    exceptions, saves a job_execution_logs
+    row (SUCCESS/FAILED). Log-write is in
+    its own try/catch so a logging failure
+    never crashes the job.
+  end note
 }
 
 ' ============================================================
@@ -1339,6 +1372,27 @@ package "scheduler" {
     --
     + cleanExpired() : void
   }
+  class AiLimitResetScheduler {
+    - userRepository : UserRepository
+    - jobLogService : JobLogService
+    --
+    + resetDailyAiUsage() : void
+  }
+  note right of AiLimitResetScheduler
+    Runs midnight. Resets every user's
+    ai_used_today to 0 so per-user AI
+    daily limits refresh each day.
+  end note
+  note bottom of scheduler
+    All schedulers wrapped with
+    JobLogService.run(name, task) which
+    records each execution (SUCCESS/FAILED
+    + error + details) to job_execution_logs
+    for auditing.
+    Active: DailyNudge (midnight),
+    StreakCheck (midnight), AiLimitReset
+    (midnight), DailyTaskGeneration (5 AM).
+  end note
 }
 
 ' ============================================================

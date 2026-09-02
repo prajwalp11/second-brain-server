@@ -32,6 +32,12 @@ public class User {
     @Column(name = "last_name")
     private String lastName;
 
+    @Column(name = "ai_daily_limit")
+    private Integer aiDailyLimit;
+
+    @Column(name = "ai_used_today")
+    private Integer aiUsedToday;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -61,6 +67,12 @@ public class User {
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+        if (this.aiDailyLimit == null) {
+            this.aiDailyLimit = 3;
+        }
+        if (this.aiUsedToday == null) {
+            this.aiUsedToday = 0;
+        }
     }
 
     @PreUpdate
