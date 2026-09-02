@@ -29,7 +29,7 @@ public class AiNudge {
     @JoinColumn(name = "domain_id")
     private Domain domain;
 
-    @Lob
+    @Column(columnDefinition = "TEXT")
     private String message;
 
     @Enumerated(EnumType.STRING)

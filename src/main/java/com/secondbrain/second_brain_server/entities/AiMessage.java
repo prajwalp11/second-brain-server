@@ -27,7 +27,7 @@ public class AiMessage {
     @Enumerated(EnumType.STRING)
     private MessageRole role;
 
-    @Lob
+    @Column(columnDefinition = "TEXT")
     private String content;
 
     private LocalDateTime createdAt;

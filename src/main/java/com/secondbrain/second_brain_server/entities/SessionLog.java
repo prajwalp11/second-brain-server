@@ -51,7 +51,7 @@ public class SessionLog {
 
     private String linkedReferenceUrl;
 
-    @Lob
+    @Column(columnDefinition = "TEXT")
     private String aiInsight;
 
     private LocalDateTime createdAt;
