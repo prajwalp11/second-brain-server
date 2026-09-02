@@ -28,5 +28,8 @@ public class MetricDefinitionResponse {
     @JsonProperty("isHigherBetter")
     private boolean isHigherBetter;
 
+    private Double minValue;
+    private Double maxValue;
+
     private Integer displayOrder;
 }

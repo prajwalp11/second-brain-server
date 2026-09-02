@@ -16,6 +16,7 @@ public class UpdateDomainRequest {
     private String customName;
     private SkillLevel skillLevel;
     private String planDescription;
+    private String context;
     private String weeklySchedule;
     private DomainStatus status;
 }

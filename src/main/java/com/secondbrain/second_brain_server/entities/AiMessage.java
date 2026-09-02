@@ -1,6 +1,7 @@
 package com.secondbrain.second_brain_server.entities;
 
 import com.secondbrain.second_brain_server.enums.MessageRole;
+import com.secondbrain.second_brain_server.enums.MessageStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -29,6 +30,15 @@ public class AiMessage {
 
     @Column(columnDefinition = "TEXT")
     private String content;
+
+    /** Outcome of the AI call for this message (set on ASSISTANT rows). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 20)
+    private MessageStatus status;
+
+    /** Error detail when status is FAILED/DEGRADED (null on success). */
+    @Column(name = "error_message", columnDefinition = "TEXT")
+    private String errorMessage;
 
     private LocalDateTime createdAt;
 }

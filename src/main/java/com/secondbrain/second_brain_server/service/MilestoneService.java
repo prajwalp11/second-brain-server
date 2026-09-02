@@ -34,6 +34,7 @@ public class MilestoneService {
     private final SessionMetricValueRepository sessionMetricValueRepository;
     private final DomainService domainService;
     private final DomainMetricDefinitionRepository metricDefinitionRepository;
+    private final com.secondbrain.second_brain_server.service.ai.AiSystemGeneratorService aiSystemGeneratorService;
 
     @Transactional
     public MilestoneResponse createMilestone(UUID userId, CreateMilestoneRequest request) {
@@ -90,6 +91,65 @@ public class MilestoneService {
             checkAndComplete(milestone);
             milestoneRepository.save(milestone);
         }
+    }
+
+    /**
+     * If a domain has completed all its active milestones (none UPCOMING/IN_PROGRESS)
+     * but has at least one DONE milestone, generate ONE progressive next milestone via AI.
+     * Guard: skips domains with no DONE history (i.e. milestones cleared deliberately).
+     *
+     * @return true if a new milestone was created.
+     */
+    @Transactional
+    public boolean generateNextMilestone(Domain domain) {
+        List<Milestone> milestones = milestoneRepository.findByDomainId(domain.getId());
+
+        boolean hasActive = milestones.stream().anyMatch(m ->
+                m.getStatus() == MilestoneStatus.UPCOMING || m.getStatus() == MilestoneStatus.IN_PROGRESS);
+        if (hasActive) {
+            return false; // still has something to work toward
+        }
+
+        // Guard: only top up domains the user COMPLETED their way to empty (>=1 DONE),
+        // not ones they cleared on purpose.
+        List<Milestone> done = milestones.stream()
+                .filter(m -> m.getStatus() == MilestoneStatus.DONE)
+                .collect(Collectors.toList());
+        if (done.isEmpty()) {
+            return false;
+        }
+
+        Milestone lastCompleted = done.stream()
+                .max((a, b) -> {
+                    LocalDateTime ca = a.getCompletedAt() != null ? a.getCompletedAt() : a.getCreatedAt();
+                    LocalDateTime cb = b.getCompletedAt() != null ? b.getCompletedAt() : b.getCreatedAt();
+                    return ca.compareTo(cb);
+                })
+                .orElse(null);
+
+        List<DomainMetricDefinition> metrics =
+                metricDefinitionRepository.findByDomainIdOrderByDisplayOrder(domain.getId());
+
+        MilestoneResponse generated = aiSystemGeneratorService.generateNextMilestone(domain, metrics, lastCompleted);
+        if (generated == null || generated.getMetricKey() == null || generated.getTargetValue() == null) {
+            return false; // AI failed or returned unusable data — skip, try again next run
+        }
+
+        Milestone next = Milestone.builder()
+                .domain(domain)
+                .label(generated.getLabel())
+                .metricKey(generated.getMetricKey())
+                .targetValue(generated.getTargetValue())
+                .unit(generated.getUnit())
+                .status(MilestoneStatus.UPCOMING)
+                .deadline(generated.getDeadline())
+                .aiGenerated(true)
+                .createdAt(LocalDateTime.now())
+                .build();
+        milestoneRepository.save(next);
+        updateProgress(domain.getId());
+        log.info("Auto-generated next milestone '{}' for domain {}", generated.getLabel(), domain.getId());
+        return true;
     }
 
     public Optional<MilestoneResponse> getNextMilestone(UUID domainId) {

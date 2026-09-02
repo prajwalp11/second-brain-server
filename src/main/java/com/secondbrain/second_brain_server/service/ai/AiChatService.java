@@ -18,6 +18,7 @@ import com.secondbrain.second_brain_server.entities.AiMessage;
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.entities.User;
 import com.secondbrain.second_brain_server.enums.MessageRole;
+import com.secondbrain.second_brain_server.enums.MessageStatus;
 import com.secondbrain.second_brain_server.exception.ResourceNotFoundException;
 import com.secondbrain.second_brain_server.exception.ValidationException;
 import com.secondbrain.second_brain_server.external.GeminiClient;
@@ -106,10 +107,14 @@ public class AiChatService {
         try {
             rawAiResponse = geminiClient.completeWithJson(systemPrompt, geminiMessages);
         } catch (Exception e) {
-            log.error("[AiChat] Gemini call failed for user {}: {}", userId, e.getMessage());
-            // Don't count this against the user's daily limit — persist nothing
+            String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            log.error("[AiChat] Gemini call failed for user {}: {}", userId, errorMsg);
+            // Record the outage on the message row so it's visible, but don't count it
+            // against the user's daily limit.
+            String fallbackReply = "AI is temporarily unavailable. Please try again in a moment. (Your question was not counted against your daily limit.)";
+            persistMessages(conversation, request.getMessage(), fallbackReply, MessageStatus.FAILED, errorMsg);
             return AiChatResponse.builder()
-                    .reply("AI is temporarily unavailable. Please try again in a moment. (Your question was not counted against your daily limit.)")
+                    .reply(fallbackReply)
                     .conversationId(conversation.getId())
                     .proposedActions(List.of())
                     .build();
@@ -118,6 +123,8 @@ public class AiChatService {
         // 7. Parse response
         String replyText;
         List<AiActionResponse> proposedActions = new ArrayList<>();
+        MessageStatus status = MessageStatus.SUCCESS;
+        String errorMessage = null;
 
         try {
             JsonNode rootNode = objectMapper.readTree(rawAiResponse);
@@ -129,10 +136,12 @@ public class AiChatService {
         } catch (JsonProcessingException e) {
             log.error("Failed to parse AI chat response JSON: {}", rawAiResponse, e);
             replyText = rawAiResponse; // Fallback: use raw text if not valid JSON
+            status = MessageStatus.DEGRADED;
+            errorMessage = "Response was not valid JSON: " + e.getMessage();
         }
 
-        // 8. Persist messages
-        persistMessages(conversation, request.getMessage(), replyText);
+        // 8. Persist messages (assistant row carries the call status)
+        persistMessages(conversation, request.getMessage(), replyText, status, errorMessage);
 
         // 9. Increment the user's daily AI usage counter (only on success)
         user.setAiUsedToday(used + 1);
@@ -236,7 +245,7 @@ public class AiChatService {
         }
     }
 
-    private void persistMessages(AiConversation conv, String userMsg, String reply) {
+    private void persistMessages(AiConversation conv, String userMsg, String reply, MessageStatus status, String errorMessage) {
         AiMessage userAiMessage = AiMessage.builder()
                 .conversation(conv)
                 .role(MessageRole.USER)
@@ -249,6 +258,8 @@ public class AiChatService {
                 .conversation(conv)
                 .role(MessageRole.ASSISTANT)
                 .content(reply)
+                .status(status)
+                .errorMessage(errorMessage)
                 .createdAt(LocalDateTime.now())
                 .build();
         aiMessageRepository.save(aiReplyMessage);

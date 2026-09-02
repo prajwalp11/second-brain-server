@@ -45,6 +45,9 @@ public class Domain {
     @Column(columnDefinition = "TEXT")
     private String planDescription;
 
+    @Column(length = 500)
+    private String context;
+
     private String weeklySchedule;
 
     private Integer currentStreak;
@@ -98,6 +101,7 @@ public class Domain {
                 .skillLevel(this.skillLevel)
                 .status(this.status)
                 .planDescription(this.planDescription)
+                .context(this.context)
                 .weeklySchedule(this.weeklySchedule)
                 .currentStreak(this.currentStreak)
                 .longestStreak(this.longestStreak)

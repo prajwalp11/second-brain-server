@@ -37,6 +37,12 @@ public class DomainMetricDefinition {
 
     private boolean isHigherBetter;
 
+    @Column(name = "min_value")
+    private Double minValue;
+
+    @Column(name = "max_value")
+    private Double maxValue;
+
     private Integer displayOrder;
 
     private LocalDateTime createdAt;
@@ -63,6 +69,8 @@ public class DomainMetricDefinition {
                 .isTrackedPerSession(this.isTrackedPerSession)
                 .isPR(this.isPR)
                 .isHigherBetter(this.isHigherBetter)
+                .minValue(this.minValue)
+                .maxValue(this.maxValue)
                 .displayOrder(this.displayOrder)
                 .build();
     }

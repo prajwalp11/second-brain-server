@@ -43,6 +43,9 @@ public class SessionLogService {
         Domain domain = domainService.assertOwnership(request.getDomainId(), userId);
         domainService.validateMetricKeys(request.getDomainId(), request.getMetrics().keySet());
 
+        // Clamp values to each metric's declared/inferred bounds (e.g. % metrics capped at 100)
+        Map<String, Double> clampedMetrics = domainService.clampMetricValues(request.getDomainId(), request.getMetrics());
+
         SessionLog newLog = SessionLog.builder()
                 .user(new User(userId))
                 .domain(domain)
@@ -57,9 +60,9 @@ public class SessionLogService {
                 .build();
 
         SessionLog savedLog = sessionLogRepository.save(newLog);
-        persistMetricValues(savedLog, request.getMetrics());
+        persistMetricValues(savedLog, clampedMetrics);
 
-        List<PersonalRecordResponse> newPrs = prService.checkAndUpdatePrs(savedLog, request.getMetrics());
+        List<PersonalRecordResponse> newPrs = prService.checkAndUpdatePrs(savedLog, clampedMetrics);
         milestoneService.updateProgress(domain.getId());
         domainService.updateStreakForDomain(domain, request.getLogDate());
         taskService.markDueTasksDoneForDomain(domain.getId(), request.getLogDate());

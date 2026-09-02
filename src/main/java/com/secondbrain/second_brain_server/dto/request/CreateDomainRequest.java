@@ -17,6 +17,9 @@ public class CreateDomainRequest {
 
     private String customName;
 
+    /** Optional free-text intent/focus to tailor AI generation (e.g. "Spanish, conversational"). */
+    private String context;
+
     @NotNull
     private SkillLevel skillLevel;
 }

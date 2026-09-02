@@ -31,6 +31,7 @@ CREATE TABLE domains (
                          skill_level VARCHAR(50),
                          status VARCHAR(50),
                          plan_description TEXT,
+                         context VARCHAR(500),
                          weekly_schedule TEXT,
                          linked_resource_url VARCHAR(500),
                          linked_resource_title VARCHAR(255),
@@ -237,6 +238,8 @@ CREATE TABLE ai_messages (
                              conversation_id UUID NOT NULL,
                              role VARCHAR(50),
                              content TEXT,
+                             status VARCHAR(20),
+                             error_message TEXT,
                              created_at TIMESTAMP DEFAULT NOW(),
 
                              CONSTRAINT fk_ai_message_conversation
@@ -313,3 +316,38 @@ CREATE TABLE IF NOT EXISTS job_execution_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_job_logs_name_date ON job_execution_logs(job_name, started_at);
+
+
+-- ============================================
+-- ALTER: Add optional value bounds to metric definitions
+-- Bounds are inferred (AI-generated or unit-based), never required from the user.
+-- min_value/max_value NULL = no bound on that side (e.g. reps/weight can grow freely).
+-- Percentage/score metrics get 0..100 so displayed values can't exceed 100%.
+-- ============================================
+ALTER TABLE domain_metric_definitions ADD COLUMN IF NOT EXISTS min_value DOUBLE PRECISION;
+ALTER TABLE domain_metric_definitions ADD COLUMN IF NOT EXISTS max_value DOUBLE PRECISION;
+
+-- Backfill: clamp existing percentage-style metrics to 0..100
+UPDATE domain_metric_definitions
+   SET min_value = 0, max_value = 100
+ WHERE (min_value IS NULL AND max_value IS NULL)
+   AND (TRIM(unit) = '%' OR LOWER(unit) LIKE '%percent%');
+
+
+-- ============================================
+-- ALTER: Add AI call outcome tracking to messages
+-- status (SUCCESS/DEGRADED/FAILED) + error_message are set on the ASSISTANT row.
+-- Lets us see when the AI (Gemini) is down without a separate audit table:
+--   SELECT created_at, status, error_message FROM ai_messages
+--   WHERE role = 'ASSISTANT' AND status <> 'SUCCESS' ORDER BY created_at DESC;
+-- ============================================
+ALTER TABLE ai_messages ADD COLUMN IF NOT EXISTS status VARCHAR(20);
+ALTER TABLE ai_messages ADD COLUMN IF NOT EXISTS error_message TEXT;
+
+
+-- ============================================
+-- ALTER: Add optional user context to domains
+-- Free-text intent/focus for generation, e.g. LANGUAGE -> "Spanish, conversational".
+-- Optional; blank still produces a generic plan. Editable + used on regenerate.
+-- ============================================
+ALTER TABLE domains ADD COLUMN IF NOT EXISTS context VARCHAR(500);

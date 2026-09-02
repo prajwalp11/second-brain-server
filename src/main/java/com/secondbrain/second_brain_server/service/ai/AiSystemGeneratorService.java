@@ -26,9 +26,9 @@ public class AiSystemGeneratorService {
     private final PromptBuilder promptBuilder;
     private final ObjectMapper objectMapper;
 
-    public GeneratedSystemResponse generateSystem(DomainType type, SkillLevel level, String linkedUrl, String customName, List<String> existingSchedules) {
+    public GeneratedSystemResponse generateSystem(DomainType type, SkillLevel level, String linkedUrl, String customName, String context, List<String> existingSchedules) {
         try {
-            String systemPrompt = promptBuilder.systemGenerator(type, level, linkedUrl, customName, existingSchedules);
+            String systemPrompt = promptBuilder.systemGenerator(type, level, linkedUrl, customName, context, existingSchedules);
             List<GeminiMessage> messages = List.of(new GeminiMessage("user", List.of(Map.of("text", "Generate the system now."))));
             String rawResponse = geminiClient.completeWithJson(systemPrompt, messages);
             return parseResponse(rawResponse);
@@ -40,13 +40,32 @@ public class AiSystemGeneratorService {
 
     public GeneratedSystemResponse regenerateSystem(Domain domain) {
         try {
-            String systemPrompt = promptBuilder.systemGenerator(domain.getDomainType(), domain.getSkillLevel(), null, domain.getCustomName(), null);
+            String systemPrompt = promptBuilder.systemGenerator(domain.getDomainType(), domain.getSkillLevel(), null, domain.getCustomName(), domain.getContext(), null);
             List<GeminiMessage> messages = List.of(new GeminiMessage("user", List.of(Map.of("text", "Regenerate the system based on the current domain details."))));
             String rawResponse = geminiClient.completeWithJson(systemPrompt, messages);
             return parseResponse(rawResponse);
         } catch (AiServiceException e) {
             log.error("AI service failed, using fallback system for domain {}", domain.getId(), e);
             return createFallbackSystem(domain.getDomainType(), domain.getSkillLevel(), domain.getCustomName());
+        }
+    }
+
+    /**
+     * Generates a single progressive "next" milestone for a domain whose active
+     * milestones are all complete. Returns null if the AI call/parse fails (caller skips).
+     */
+    public com.secondbrain.second_brain_server.dto.response.MilestoneResponse generateNextMilestone(
+            Domain domain,
+            java.util.List<com.secondbrain.second_brain_server.entities.DomainMetricDefinition> metrics,
+            com.secondbrain.second_brain_server.entities.Milestone lastCompleted) {
+        try {
+            String prompt = promptBuilder.nextMilestone(domain, metrics, lastCompleted);
+            List<GeminiMessage> messages = List.of(new GeminiMessage("user", List.of(Map.of("text", "Generate the next milestone now."))));
+            String rawResponse = geminiClient.completeWithJson(prompt, messages);
+            return objectMapper.readValue(rawResponse, com.secondbrain.second_brain_server.dto.response.MilestoneResponse.class);
+        } catch (Exception e) {
+            log.error("Failed to generate next milestone for domain {}: {}", domain.getId(), e.getMessage());
+            return null;
         }
     }
 

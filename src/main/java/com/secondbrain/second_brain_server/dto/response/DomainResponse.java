@@ -23,6 +23,7 @@ public class DomainResponse {
     private SkillLevel skillLevel;
     private DomainStatus status;
     private String planDescription;
+    private String context;
     private String weeklySchedule;
     private Integer currentStreak;
     private Integer longestStreak;

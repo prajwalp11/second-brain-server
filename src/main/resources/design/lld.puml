@@ -58,6 +58,7 @@ package "entities" {
     - skillLevel : SkillLevel <<enum>>
     - status : DomainStatus <<enum>>
     - planDescription : String
+    - context : String
     - weeklySchedule : String
     - linkedResourceUrl : String
     - linkedResourceTitle : String
@@ -80,6 +81,8 @@ package "entities" {
     - isTrackedPerSession : boolean
     - isPR : boolean
     - isHigherBetter : boolean
+    - minValue : Double
+    - maxValue : Double
     - displayOrder : Integer
     --
     + toDto() : MetricDefinitionDto
@@ -254,8 +257,20 @@ package "entities" {
     - conversationId : UUID <<FK>>
     - role : MessageRole <<enum>>
     - content : String
+    - status : MessageStatus <<enum>>
+    - errorMessage : String
     - createdAt : LocalDateTime
   }
+  note right of AiMessage
+    status (SUCCESS/DEGRADED/FAILED) +
+    errorMessage set on the ASSISTANT row
+    by AiChatService. On a Gemini outage a
+    FAILED assistant row is still written
+    (with fallback text) so downtime is
+    visible; not counted against daily limit.
+    Health lives with the message (correct
+    grain) — separate from scheduler audit.
+  end note
 
   
 
@@ -351,6 +366,7 @@ package "dto_request" {
   class CreateDomainRequest {
     + domainType : DomainType <<NotNull>>
     + customName : String
+    + context : String
     + skillLevel : SkillLevel <<NotNull>>
     + linkedResourceUrl : String
   }
@@ -358,6 +374,7 @@ package "dto_request" {
     + customName : String
     + skillLevel : SkillLevel
     + planDescription : String
+    + context : String
     + weeklySchedule : String
     + linkedResourceUrl : String
     + status : DomainStatus
@@ -807,6 +824,7 @@ package "services" {
     + createMilestone(userId: UUID, request: CreateMilestoneRequest) : MilestoneDto
     + getMilestonesForDomain(domainId: UUID) : List<MilestoneDto>
     + updateProgress(domainId: UUID) : void
+    + generateNextMilestone(domain: Domain) : boolean
     + getNextMilestone(domainId: UUID) : Optional<MilestoneDto>
     - resolveCurrentValue(milestone: Milestone) : Double
     - checkAndComplete(milestone: Milestone) : boolean
@@ -893,7 +911,7 @@ package "services" {
     exceptions, saves a job_execution_logs
     row (SUCCESS/FAILED). Log-write is in
     its own try/catch so a logging failure
-    never crashes the job.
+    never crashes the job. SCHEDULER RUNS ONLY.
   end note
 }
 
@@ -907,6 +925,7 @@ package "service.ai" {
     --
     + generateSystem(domainType: DomainType, skillLevel: SkillLevel, linkedUrl: String) : GeneratedSystemDto
     + regenerateSystem(domain: Domain) : GeneratedSystemDto
+    + generateNextMilestone(domain: Domain, metrics: List<DomainMetricDefinition>, lastCompleted: Milestone) : MilestoneDto
     - parseResponse(raw: String) : GeneratedSystemDto
   }
   note right of AiSystemGeneratorService
@@ -1013,6 +1032,7 @@ package "service.ai" {
     + chat(context: UserContext, chatMode: ChatMode, domainName: String) : String
     + taskGeneration(context: UserContext, domain: Domain) : String
     + weeklyInsight(stats: List<WeeklyStatDto>, prs: List<PersonalRecordDto>) : String
+    + nextMilestone(domain: Domain, metrics: List<DomainMetricDefinition>, lastCompleted: Milestone) : String
   }
   note right of PromptBuilder
     chat() builds strict domain-scoped prompt:
@@ -1383,6 +1403,21 @@ package "scheduler" {
     ai_used_today to 0 so per-user AI
     daily limits refresh each day.
   end note
+  class MilestoneTopUpScheduler {
+    - domainRepository : DomainRepository
+    - milestoneService : MilestoneService
+    - jobLogService : JobLogService
+    --
+    + topUpMilestones() : void
+  }
+  note right of MilestoneTopUpScheduler
+    Runs 2 AM. For each ACTIVE domain with
+    no active milestones but >=1 DONE, calls
+    MilestoneService.generateNextMilestone to
+    AI-generate ONE progressive milestone.
+    Guard skips domains cleared deliberately
+    (no DONE history).
+  end note
   note bottom of scheduler
     All schedulers wrapped with
     JobLogService.run(name, task) which
@@ -1443,7 +1478,17 @@ package "util" {
   }
   class MetricValidator {
     + validateKeys(submitted: Set<String>, defined: List<DomainMetricDefinition>) : void
+    + clampValues(submitted: Map<String,Double>, defined: List<DomainMetricDefinition>) : Map<String,Double>
+    + clamp(value: Double, metric: DomainMetricDefinition) : Double
   }
+  note right of MetricValidator
+    clampValues enforces metric bounds on
+    session logs. Bounds are inferred, never
+    required from the user: declared min/max
+    win; else unit '%'/percent -> 0..100;
+    else floor 0, no ceiling. Stops percentage
+    and score metrics exceeding 100%.
+  end note
   class ContextWindowUtil {
     + truncateToLimit(text: String, maxTokens: Integer) : String
   }

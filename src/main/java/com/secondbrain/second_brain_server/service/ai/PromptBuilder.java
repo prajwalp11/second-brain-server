@@ -5,6 +5,8 @@ import com.secondbrain.second_brain_server.dto.response.PersonalRecordResponse;
 import com.secondbrain.second_brain_server.dto.response.SessionLogResponse;
 import com.secondbrain.second_brain_server.dto.response.WeeklyStatResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
+import com.secondbrain.second_brain_server.entities.DomainMetricDefinition;
+import com.secondbrain.second_brain_server.entities.Milestone;
 import com.secondbrain.second_brain_server.entities.SessionLog;
 import com.secondbrain.second_brain_server.enums.ChatMode;
 import com.secondbrain.second_brain_server.enums.DomainType;
@@ -29,7 +31,7 @@ public class PromptBuilder {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final DecimalFormat DECIMAL_FORMAT = new DecimalFormat("#.##");
 
-    public String systemGenerator(DomainType type, SkillLevel level, String url, String customName, List<String> existingSchedules) {
+    public String systemGenerator(DomainType type, SkillLevel level, String url, String customName, String context, List<String> existingSchedules) {
         LocalDate today = LocalDate.now();
         String dayOfWeek = today.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
 
@@ -49,6 +51,8 @@ public class PromptBuilder {
         prompt.append("      \"isTrackedPerSession\": boolean,\n");
         prompt.append("      \"isPR\": boolean,\n");
         prompt.append("      \"isHigherBetter\": boolean,\n");
+        prompt.append("      \"minValue\": number or null,\n");
+        prompt.append("      \"maxValue\": number or null,\n");
         prompt.append("      \"displayOrder\": integer\n");
         prompt.append("    }\n");
         prompt.append("  ],\n");
@@ -74,6 +78,7 @@ public class PromptBuilder {
         prompt.append("- weeklySchedule: Use short 3-letter day names like 'Mon,Wed,Fri' NOT full day names.\n");
         prompt.append("- All deadlines and due dates MUST be in the future relative to today's date.\n");
         prompt.append("- For metrics, provide at least 3-5 relevant metrics.\n");
+        prompt.append("- Metric bounds: for any percentage or 0-100 score metric (unit '%' or a score), set minValue: 0 and maxValue: 100 so it can never exceed 100%. For open-ended metrics (reps, weight, distance, minutes, count), set minValue: 0 and maxValue: null.\n");
         prompt.append("- For milestones, provide 2-3 achievable milestones with realistic deadlines.\n");
         prompt.append("- For tasks, provide 2-3 initial tasks with due dates in the next 1-2 weeks.\n\n");
         prompt.append("User Input:\n");
@@ -81,6 +86,9 @@ public class PromptBuilder {
         prompt.append("Skill Level: ").append(level).append("\n");
         if (customName != null && !customName.isEmpty()) {
             prompt.append("Specific focus/variation: ").append(customName).append("\n");
+        }
+        if (context != null && !context.isBlank()) {
+            prompt.append("User's extra context/focus (IMPORTANT — tailor the plan, metrics, and milestones to this): ").append(context).append("\n");
         }
         if (url != null && !url.isEmpty()) {
             prompt.append("User's provided resource (use only if it looks like a real, relevant URL): ").append(url).append("\n");
@@ -405,6 +413,59 @@ public class PromptBuilder {
                     .append(" (Previous: ").append(DECIMAL_FORMAT.format(pr.getPreviousValue())).append(pr.getUnit()).append(")\n"));
         }
         prompt.append("\nProvide your weekly insight:\n");
+        return prompt.toString();
+    }
+
+    /**
+     * Prompt to generate a single progressive "next" milestone for a domain whose
+     * active milestones are all complete. Feeds the domain's metrics and the most
+     * recently completed milestone so the AI can raise the bar sensibly.
+     */
+    public String nextMilestone(Domain domain, List<DomainMetricDefinition> metrics, Milestone lastCompleted) {
+        LocalDate today = LocalDate.now();
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("You are an expert coach for a personal growth app called 'Second Brain'.\n");
+        prompt.append("Today is ").append(today.format(DATE_FORMATTER)).append(".\n");
+        prompt.append("The user has completed all active milestones for a domain. Generate ONE new, progressively harder milestone to keep them moving.\n\n");
+
+        prompt.append("DOMAIN: ").append(domain.getCustomName() != null ? domain.getCustomName() : domain.getDomainType()).append("\n");
+        prompt.append("Skill Level: ").append(domain.getSkillLevel()).append("\n");
+        if (domain.getContext() != null && !domain.getContext().isBlank()) {
+            prompt.append("User context/focus: ").append(domain.getContext()).append("\n");
+        }
+        prompt.append("Plan: ").append(domain.getPlanDescription() != null ? domain.getPlanDescription() : "None").append("\n");
+        prompt.append("Current Streak: ").append(domain.getCurrentStreak()).append(" days\n\n");
+
+        prompt.append("Available metrics (choose ONE metricKey to target, prefer a PR/higher-better metric):\n");
+        if (metrics != null && !metrics.isEmpty()) {
+            metrics.forEach(m -> prompt.append("  - metricKey=").append(m.getMetricKey())
+                    .append(", label=").append(m.getLabel())
+                    .append(", unit=").append(m.getUnit() != null ? m.getUnit() : "")
+                    .append(", higherBetter=").append(m.isHigherBetter())
+                    .append("\n"));
+        } else {
+            prompt.append("  (none defined)\n");
+        }
+        prompt.append("\n");
+
+        if (lastCompleted != null) {
+            prompt.append("Most recently completed milestone (make the new target harder than this):\n");
+            prompt.append("  label=").append(lastCompleted.getLabel())
+                    .append(", metricKey=").append(lastCompleted.getMetricKey())
+                    .append(", targetValue=").append(lastCompleted.getTargetValue())
+                    .append(", unit=").append(lastCompleted.getUnit() != null ? lastCompleted.getUnit() : "")
+                    .append("\n\n");
+        }
+
+        prompt.append("Respond with ONE milestone as a valid JSON object (no markdown, no extra text):\n");
+        prompt.append("{\n");
+        prompt.append("  \"label\": \"string (short, motivating)\",\n");
+        prompt.append("  \"metricKey\": \"string (MUST match one of the available metricKeys above)\",\n");
+        prompt.append("  \"targetValue\": number,\n");
+        prompt.append("  \"unit\": \"string\",\n");
+        prompt.append("  \"deadline\": \"YYYY-MM-DD (a realistic FUTURE date)\"\n");
+        prompt.append("}\n");
+        prompt.append("The deadline MUST be after today. The targetValue MUST be a meaningful step up from the last completed milestone.\n");
         return prompt.toString();
     }
 }

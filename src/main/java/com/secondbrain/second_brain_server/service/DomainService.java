@@ -88,6 +88,7 @@ public class DomainService {
                 .user(new com.secondbrain.second_brain_server.entities.User(userId))
                 .domainType(request.getDomainType())
                 .customName(request.getCustomName())
+                .context(request.getContext())
                 .skillLevel(request.getSkillLevel())
                 .status(DomainStatus.ACTIVE)
                 .currentStreak(0)
@@ -105,7 +106,7 @@ public class DomainService {
                 .collect(Collectors.toList());
 
         GeneratedSystemResponse generatedSystem = aiSystemGeneratorService.generateSystem(
-                request.getDomainType(), request.getSkillLevel(), null, request.getCustomName(), existingSchedules);
+                request.getDomainType(), request.getSkillLevel(), null, request.getCustomName(), request.getContext(), existingSchedules);
         applyGeneratedSystem(savedDomain, generatedSystem);
 
         return savedDomain.toResponse();
@@ -118,6 +119,7 @@ public class DomainService {
         Optional.ofNullable(request.getCustomName()).ifPresent(domain::setCustomName);
         Optional.ofNullable(request.getSkillLevel()).ifPresent(domain::setSkillLevel);
         Optional.ofNullable(request.getPlanDescription()).ifPresent(domain::setPlanDescription);
+        Optional.ofNullable(request.getContext()).ifPresent(domain::setContext);
         Optional.ofNullable(request.getWeeklySchedule()).ifPresent(domain::setWeeklySchedule);
         Optional.ofNullable(request.getStatus()).ifPresent(domain::setStatus);
         domain.setUpdatedAt(LocalDateTime.now());
@@ -212,6 +214,39 @@ public class DomainService {
         MetricValidator.validateKeys(submittedKeys, definedMetrics);
     }
 
+    /**
+     * Clamps submitted metric values to each metric's (declared or inferred) bounds.
+     * Percentage/score metrics can't exceed 100; all values are floored at 0.
+     */
+    public java.util.Map<String, Double> clampMetricValues(UUID domainId, java.util.Map<String, Double> metrics) {
+        if (metrics == null || metrics.isEmpty()) {
+            return metrics;
+        }
+        List<DomainMetricDefinition> definedMetrics =
+                metricDefinitionRepository.findByDomainIdOrderByDisplayOrder(domainId);
+        return MetricValidator.clampValues(metrics, definedMetrics);
+    }
+
+    /** Persisted min for an AI-generated metric: use AI value if given, else default floor of 0. */
+    private Double resolveMinValue(com.secondbrain.second_brain_server.dto.response.MetricDefinitionResponse dto) {
+        return dto.getMinValue() != null ? dto.getMinValue() : 0.0;
+    }
+
+    /** Persisted max: use AI value if given, else 100 for percentage metrics, else null (open-ended). */
+    private Double resolveMaxValue(com.secondbrain.second_brain_server.dto.response.MetricDefinitionResponse dto) {
+        if (dto.getMaxValue() != null) {
+            return dto.getMaxValue();
+        }
+        String unit = dto.getUnit();
+        if (unit != null) {
+            String u = unit.trim().toLowerCase();
+            if (u.equals("%") || u.contains("percent")) {
+                return 100.0;
+            }
+        }
+        return null;
+    }
+
     private void applyGeneratedSystem(Domain domain, GeneratedSystemResponse generated) {
         Optional.ofNullable(generated.getPlanDescription()).ifPresent(domain::setPlanDescription);
         Optional.ofNullable(generated.getWeeklySchedule()).ifPresent(domain::setWeeklySchedule);
@@ -232,6 +267,8 @@ public class DomainService {
                             .isTrackedPerSession(dto.isTrackedPerSession())
                             .isPR(dto.isPR())
                             .isHigherBetter(dto.isHigherBetter())
+                            .minValue(resolveMinValue(dto))
+                            .maxValue(resolveMaxValue(dto))
                             .displayOrder(dto.getDisplayOrder())
                             .build())
                     .collect(Collectors.toList());
