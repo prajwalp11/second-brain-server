@@ -388,7 +388,8 @@ public class PromptBuilder {
         prompt.append("  {\n");
         prompt.append("    \"title\": \"string (concise, max 60 chars)\",\n");
         prompt.append("    \"description\": \"string (1-2 sentences with specifics)\",\n");
-        prompt.append("    \"dueDate\": \"YYYY-MM-DD\"\n");
+        prompt.append("    \"dueDate\": \"YYYY-MM-DD\",\n");
+        prompt.append("    \"videoTopic\": \"string: a short, generic YouTube search phrase (3-6 words) for a tutorial that teaches the SKILL behind this task — NOT the literal task text. Focus on the technique/concept a beginner would search. E.g. task 'Bench 3x8 at 82.5kg' -> 'proper bench press form technique'; task 'Review chapter 3 vocab' -> 'Spanish vocabulary memorization tips'.\"\n");
         prompt.append("  }\n");
         prompt.append("]\n");
 

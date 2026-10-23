@@ -22,7 +22,8 @@ package "entities" {
     - id : UUID <<PK>>
     - name : String
     - email : String <<unique>>
-    - passwordHash : String
+    - passwordHash : String <<nullable for SSO users>>
+    - authProvider : String <<EMAIL|GOOGLE|APPLE>>
     
     - profilePictureUrl : String
     - timezone : String
@@ -33,6 +34,26 @@ package "entities" {
     --
     + toDto() : UserDto
   }
+
+  class PasswordResetToken {
+    - id : UUID <<PK>>
+    - userId : UUID <<FK>>
+    - tokenHash : String
+    - expiresAt : LocalDateTime
+    - used : boolean
+    - attempts : int
+    - createdAt : LocalDateTime
+  }
+  note right of PasswordResetToken
+    Stores a HASH of a 6-digit code (never the
+    raw code). Single-use, configurable expiry
+    (auth.password-reset.expiry-ms). Emailed via
+    Resend. Send-rate limited (max-requests per
+    request-window-hours, default 3/12h) and
+    brute-force limited (attempts >= max-attempts,
+    default 10, invalidates the code). Old codes
+    invalidated when a new one is issued.
+  end note
 
   class JobExecutionLog {
     - id : UUID <<PK>>
@@ -452,6 +473,20 @@ package "dto_response" {
     + profilePictureUrl : String
     + timezone : String
   }
+  class UpdateProfileRequest {
+    + firstName : String
+    + lastName : String
+    + currentPassword : String
+    + newPassword : String <<Size min 8>>
+  }
+  class ForgotPasswordRequest {
+    + email : String <<Email, NotBlank>>
+  }
+  class ResetPasswordRequest {
+    + email : String <<Email, NotBlank>>
+    + code : String <<NotBlank>>
+    + newPassword : String <<Size min 8>>
+  }
   class DomainDto {
     + id : UUID
     + domainType : DomainType
@@ -711,20 +746,34 @@ package "repositories" {
 package "services" {
   class AuthService {
     - userRepository : UserRepository
-    
+    - passwordResetTokenRepository : PasswordResetTokenRepository
+    - emailService : EmailService
     - jwtUtil : JwtUtil
     - passwordEncoder : PasswordEncoder
-    - googleTokenVerifier : GoogleTokenVerifier
+    - resetExpiryMs : long <<@Value>>
+    - resetMaxRequests : int <<@Value>>
+    - resetWindowHours : int <<@Value>>
+    - resetMaxAttempts : int <<@Value>>
     --
-    + register(request: RegisterRequest) : AuthResponse
+    + register(request: RegisterRequest) : String
     + login(request: LoginRequest) : AuthResponse
-    + googleAuth(request: GoogleAuthRequest) : AuthResponse
-    + refreshAccessToken(request: RefreshTokenRequest) : AuthResponse
+    + forgotPassword(email: String) : void
+    + resetPassword(email: String, code: String, newPassword: String) : void
     + logout(userId: UUID) : void
-    - createRefreshToken(user: User) : RefreshToken
-    - bootstrapUserDefaults(user: User) : void
+    + getProfile(userId: UUID) : UserDto
+    + updateProfile(userId: UUID, request: UpdateProfileRequest) : UserDto
     - buildAuthResponse(user: User) : AuthResponse
   }
+  class EmailService {
+    - resendApiKey : String <<@Value RESEND_API_KEY>>
+    - mailFrom : String <<@Value MAIL_FROM>>
+    --
+    + sendPasswordResetCode(toEmail: String, code: String) : void
+  }
+  note right of EmailService
+    Sends via Resend HTTP API. Failures are
+    logged, not thrown to the caller.
+  end note
   class DomainService {
     - domainRepository : DomainRepository
     - metricDefinitionRepository : DomainMetricDefinitionRepository
@@ -888,17 +937,6 @@ package "services" {
     - computeStreak(logDates: List<LocalDate>, schedule: String, today: LocalDate) : Integer
   }
   
-  class ExportService {
-    - sessionLogRepository : SessionLogRepository
-    - sessionMetricValueRepository : SessionMetricValueRepository
-    - prRepository : PersonalRecordRepository
-    - milestoneRepository : MilestoneRepository
-    - domainRepository : DomainRepository
-    --
-    + exportAsJson(userId: UUID) : String
-    + exportAsCsv(userId: UUID) : byte[]
-  }
-
   class JobLogService {
     - jobExecutionLogRepository : JobExecutionLogRepository
     --
@@ -1049,6 +1087,7 @@ package "service.ai" {
     - contextAssembler : UserContextAssembler
     - promptBuilder : PromptBuilder
     - geminiClient : GeminiClient
+    - maxTasksPerDomain : int <<@Value tasks.generation.max-per-domain:5>>
     --
     + generateTasksForUser(userId: UUID) : int
     + generateTasksForDomain(userId: UUID, domain: Domain, context: UserContext) : int
@@ -1059,12 +1098,16 @@ package "service.ai" {
     1. Fetch all ACTIVE domains for user
     2. Assemble full UserContext
     3. For each domain:
-       - check pending tasks count
-       - if 0: call AI with full context
+       - count ALL open (TODO/IN_PROGRESS) tasks
+       - if >= maxTasksPerDomain (default 5): skip
+       - else call AI with full context
        - parse JSON array of tasks
        - save as aiGenerated=true
-    Only generates when domain has
-    zero pending tasks — no duplicates.
+    Cap is a config prop (MAX_TASKS_PER_DOMAIN env),
+    per-domain, counts tasks of ANY due date
+    (fixed earlier 30-day-window bug that let
+    tasks pile up). Will move to per-user/plan
+    when subscriptions are added.
     AI sees recent logs, PRs, streaks,
     milestones, feel patterns to create
     progressive, context-aware tasks.
@@ -1139,10 +1182,17 @@ package "controllers" {
     --
     + register(request: RegisterRequest) : ResponseEntity<AuthResponse>
     + login(request: LoginRequest) : ResponseEntity<AuthResponse>
-    + googleAuth(request: GoogleAuthRequest) : ResponseEntity<AuthResponse>
-    + refresh(request: RefreshTokenRequest) : ResponseEntity<AuthResponse>
+    + forgotPassword(request: ForgotPasswordRequest) : ResponseEntity<Void>
+    + resetPassword(request: ResetPasswordRequest) : ResponseEntity<Void>
     + logout() : ResponseEntity<Void>
   }
+  note right of AuthController
+    forgotPassword: always 200 (no email enumeration);
+    if a LOCAL account exists, emails a 6-digit code.
+    resetPassword: validates code (hash/expiry/used),
+    BCrypt-updates password. googleAuth endpoint
+    planned for Phase 2 (Google SSO).
+  end note
   class DomainController {
     - domainService : DomainService
     --
@@ -1208,12 +1258,17 @@ package "controllers" {
   }
   class UserController {
     - authService : AuthService
-    - exportService : ExportService
     --
     + getProfile() : ResponseEntity<UserDto>
     + updateProfile(request: UpdateProfileRequest) : ResponseEntity<UserDto>
-    + exportData(format: String) : ResponseEntity<byte[]>
   }
+  note right of UserController
+    updateProfile PATCH /api/users/profile
+    updates firstName/lastName and optionally
+    changes password (requires currentPassword
+    + newPassword, current verified via encoder).
+    Handled by AuthService.updateProfile.
+  end note
   note right of AuthController
     All controllers resolve userId
     via @CurrentUser from SecurityContext.
@@ -1417,6 +1472,17 @@ package "scheduler" {
     AI-generate ONE progressive milestone.
     Guard skips domains cleared deliberately
     (no DONE history).
+  end note
+  class PasswordResetTokenCleanupScheduler {
+    - passwordResetTokenRepository : PasswordResetTokenRepository
+    - jobLogService : JobLogService
+    --
+    + cleanupTokens() : void
+  }
+  note right of PasswordResetTokenCleanupScheduler
+    Runs hourly (cron 0 0 * * * ?). Deletes used
+    or expired password_reset_tokens so the table
+    stays bounded. Wrapped in JobLogService.
   end note
   note bottom of scheduler
     All schedulers wrapped with

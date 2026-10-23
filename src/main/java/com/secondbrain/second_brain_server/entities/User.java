@@ -32,6 +32,9 @@ public class User {
     @Column(name = "last_name")
     private String lastName;
 
+    @Column(name = "auth_provider")
+    private String authProvider;
+
     @Column(name = "ai_daily_limit")
     private Integer aiDailyLimit;
 
@@ -73,6 +76,9 @@ public class User {
         if (this.aiUsedToday == null) {
             this.aiUsedToday = 0;
         }
+        if (this.authProvider == null) {
+            this.authProvider = "EMAIL";
+        }
     }
 
     @PreUpdate
@@ -90,6 +96,7 @@ public class User {
         return UserResponse.builder()
                 .id(this.id)
                 .firstName(this.firstName)
+                .lastName(this.lastName)
                 .email(this.email)
                 .build();
     }

@@ -36,6 +36,9 @@ public class TaskGenerationService {
     private final ObjectMapper objectMapper;
     private final com.secondbrain.second_brain_server.external.YouTubeService youTubeService;
 
+    @org.springframework.beans.factory.annotation.Value("${tasks.generation.max-per-domain:5}")
+    private int maxTasksPerDomain;
+
     /**
      * Generate tasks for all active domains of a user that have no pending tasks.
      * Returns the number of tasks generated.
@@ -69,21 +72,12 @@ public class TaskGenerationService {
      */
     @Transactional
     public int generateTasksForDomain(UUID userId, Domain domain, UserContext context) {
-        // Check if domain already has pending tasks
-        List<Task> pendingTasks = taskRepository.findByDomainIdAndDueDateLessThanEqualAndStatusIn(
-                domain.getId(), LocalDate.now().plusDays(30),
-                Arrays.asList(TaskStatus.TODO, TaskStatus.IN_PROGRESS));
+        // Cap: skip if the domain already has >= maxTasksPerDomain open tasks (any due date).
+        long openTasks = taskRepository.countByDomainIdAndStatusIn(
+                domain.getId(), Arrays.asList(TaskStatus.TODO, TaskStatus.IN_PROGRESS));
 
-        // Also check future tasks that haven't expired yet
-        List<Task> futureTasks = taskRepository.findByUserIdAndDueDateBetweenAndStatusIn(
-                userId, LocalDate.now(), LocalDate.now().plusDays(30),
-                Arrays.asList(TaskStatus.TODO, TaskStatus.IN_PROGRESS))
-                .stream()
-                .filter(t -> t.getDomain() != null && t.getDomain().getId().equals(domain.getId()))
-                .collect(Collectors.toList());
-
-        if (!futureTasks.isEmpty()) {
-            log.debug("Domain {} already has {} pending tasks, skipping", domain.getId(), futureTasks.size());
+        if (openTasks >= maxTasksPerDomain) {
+            log.debug("Domain {} already has {} open tasks (cap {}), skipping", domain.getId(), openTasks, maxTasksPerDomain);
             return 0;
         }
 
@@ -105,7 +99,10 @@ public class TaskGenerationService {
         String domainName = domain.getCustomName() != null ? domain.getCustomName() : domain.getDomainType().name();
         List<Task> newTasks = generatedTasks.stream()
                 .map(gt -> {
-                    var video = youTubeService.findVideo(gt.title, domainName);
+                    String videoQuery = (gt.videoTopic != null && !gt.videoTopic.isBlank())
+                            ? gt.videoTopic
+                            : gt.title;
+                    var video = youTubeService.findVideo(videoQuery, domainName);
                     return Task.builder()
                         .user(domain.getUser())
                         .domain(domain)
@@ -141,5 +138,6 @@ public class TaskGenerationService {
         public String title;
         public String description;
         public LocalDate dueDate;
+        public String videoTopic;
     }
 }

@@ -13,6 +13,7 @@ CREATE TABLE users (
                        password VARCHAR(255),
                        first_name VARCHAR(255),
                        last_name VARCHAR(255),
+                       auth_provider VARCHAR(20) DEFAULT 'EMAIL',
                        ai_daily_limit INT DEFAULT 3,
                        ai_used_today INT DEFAULT 0,
                        created_at TIMESTAMP DEFAULT NOW(),
@@ -351,3 +352,33 @@ ALTER TABLE ai_messages ADD COLUMN IF NOT EXISTS error_message TEXT;
 -- Optional; blank still produces a generic plan. Editable + used on regenerate.
 -- ============================================
 ALTER TABLE domains ADD COLUMN IF NOT EXISTS context VARCHAR(500);
+
+
+-- ============================================
+-- ALTER: Auth provider + nullable password for SSO support
+-- auth_provider: EMAIL (email/password), GOOGLE, APPLE.
+-- Password becomes nullable so SSO users (no password) are valid.
+-- ============================================
+ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider VARCHAR(20) DEFAULT 'EMAIL';
+ALTER TABLE users ALTER COLUMN password DROP NOT NULL;
+
+
+-- ============================================
+-- PASSWORD RESET TOKENS (forgot-password flow)
+-- Stores a HASH of a 6-digit code (never the raw code). Single-use, 30-min expiry.
+-- ============================================
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL,
+    token_hash VARCHAR(255) NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    used BOOLEAN DEFAULT FALSE,
+    attempts INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW(),
+    CONSTRAINT fk_reset_token_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_reset_tokens_user ON password_reset_tokens(user_id);
+
+-- ALTER for existing DBs: brute-force attempt counter per code
+ALTER TABLE password_reset_tokens ADD COLUMN IF NOT EXISTS attempts INT DEFAULT 0;

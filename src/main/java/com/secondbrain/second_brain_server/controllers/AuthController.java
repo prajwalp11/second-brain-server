@@ -31,6 +31,24 @@ public class AuthController {
         return ResponseEntity.ok(authService.login(request));
     }
 
+    @PostMapping("/forgot-password")
+    public ResponseEntity<java.util.Map<String, String>> forgotPassword(@Valid @RequestBody com.secondbrain.second_brain_server.dto.request.ForgotPasswordRequest request) {
+        boolean rateLimited = authService.forgotPassword(request.getEmail());
+        String message = rateLimited
+                ? "You've reached the password reset limit. Please try again later."
+                : "If an account exists for that email, we've sent a 6-digit code.";
+        return ResponseEntity.ok(java.util.Map.of(
+                "status", rateLimited ? "RATE_LIMITED" : "SENT",
+                "message", message
+        ));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<Void> resetPassword(@Valid @RequestBody com.secondbrain.second_brain_server.dto.request.ResetPasswordRequest request) {
+        authService.resetPassword(request.getEmail(), request.getCode(), request.getNewPassword());
+        return ResponseEntity.ok().build();
+    }
+
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(@CurrentUser UUID userId) {
         authService.logout(userId);

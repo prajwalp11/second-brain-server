@@ -17,5 +17,6 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
     List<Task> findByUserIdAndDueDateBetweenAndStatusIn(UUID userId, LocalDate startDate, LocalDate endDate, List<TaskStatus> statuses);
     List<Task> findByDomainId(UUID domainId);
     List<Task> findByDomainIdAndDueDateLessThanEqualAndStatusIn(UUID domainId, LocalDate dueDate, List<TaskStatus> statuses);
+    long countByDomainIdAndStatusIn(UUID domainId, List<TaskStatus> statuses);
     Long countByUserIdAndStatusAndDueDateBetween(UUID userId, TaskStatus status, LocalDate from, LocalDate to);
 }

@@ -79,21 +79,17 @@ createdb secondbrain_db
 ```
 
 3. **Configure environment variables**
+
+Config is read from environment variables (see `.env.example`). `application.properties` references them as `${VAR}`:
 ```bash
-# application.properties
-spring.datasource.url=jdbc:postgresql://localhost:5432/secondbrain_db
-spring.datasource.username=your_username
-spring.datasource.password=your_password
-
-# Gemini API
-gemini.api.key=YOUR_GEMINI_API_KEY
-
-# JWT Secret (change in production!)
-jwt.secret=your-secret-key-here
-jwt.access-token-expiry-ms=86400000
-
-# Google OAuth (optional)
-google.client.id=your-google-client-id
+JWT_SECRET=change-me-to-a-long-random-secret
+DATABASE_URL=jdbc:postgresql://localhost:5432/secondbrain_db
+DB_USERNAME=sbuser
+DB_PASSWORD=your_db_password
+GEMINI_API_KEY=YOUR_GEMINI_API_KEY
+AI_DAILY_LIMIT=3                 # per-user daily AI chat limit
+MAX_TASKS_PER_DOMAIN=5           # task-gen cap per domain
+YOUTUBE_API_KEY=your_youtube_api_key   # optional (task resource links)
 ```
 
 4. **Run the application**
@@ -105,12 +101,13 @@ The server will start at `http://localhost:8080`
 
 ### Database Setup
 
-The application uses Flyway for database migrations. On first run, it will automatically create all tables.
-
-If you have an existing database, the schema is in:
+Schema is **not** auto-migrated (`spring.jpa.hibernate.ddl-auto=none`). Apply the schema
+manually to your database. The full schema (and incremental ALTERs appended over time) is in:
 ```
 src/main/resources/db/V1__create_initial_schema.sql
 ```
+For a fresh DB, run that whole file. For an existing DB, run the new `ALTER ... IF NOT EXISTS`
+statements at the bottom of the file that aren't applied yet.
 
 ## 📡 API Overview
 
