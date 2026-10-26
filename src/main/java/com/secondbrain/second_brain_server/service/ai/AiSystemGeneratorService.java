@@ -3,14 +3,16 @@ package com.secondbrain.second_brain_server.service.ai;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.secondbrain.second_brain_server.dto.response.GeneratedSystemResponse;
+import com.secondbrain.second_brain_server.dto.response.MilestoneResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
+import com.secondbrain.second_brain_server.entities.DomainMetricDefinition;
+import com.secondbrain.second_brain_server.entities.Milestone;
 import com.secondbrain.second_brain_server.enums.DomainType;
 import com.secondbrain.second_brain_server.enums.SkillLevel;
 import com.secondbrain.second_brain_server.exception.AiServiceException;
 import com.secondbrain.second_brain_server.external.GeminiClient;
 import com.secondbrain.second_brain_server.external.GeminiMessage;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -54,15 +56,15 @@ public class AiSystemGeneratorService {
      * Generates a single progressive "next" milestone for a domain whose active
      * milestones are all complete. Returns null if the AI call/parse fails (caller skips).
      */
-    public com.secondbrain.second_brain_server.dto.response.MilestoneResponse generateNextMilestone(
+    public MilestoneResponse generateNextMilestone(
             Domain domain,
-            java.util.List<com.secondbrain.second_brain_server.entities.DomainMetricDefinition> metrics,
-            com.secondbrain.second_brain_server.entities.Milestone lastCompleted) {
+            List<DomainMetricDefinition> metrics,
+            Milestone lastCompleted) {
         try {
             String prompt = promptBuilder.nextMilestone(domain, metrics, lastCompleted);
             List<GeminiMessage> messages = List.of(new GeminiMessage("user", List.of(Map.of("text", "Generate the next milestone now."))));
             String rawResponse = geminiClient.completeWithJson(prompt, messages);
-            return objectMapper.readValue(rawResponse, com.secondbrain.second_brain_server.dto.response.MilestoneResponse.class);
+            return objectMapper.readValue(rawResponse, MilestoneResponse.class);
         } catch (Exception e) {
             log.error("Failed to generate next milestone for domain {}: {}", domain.getId(), e.getMessage());
             return null;

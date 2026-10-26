@@ -21,7 +21,8 @@ public class User {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private UUID id;
 
-    @Column(unique = true)
+    // Uniqueness is enforced by a PARTIAL index (unique on email WHERE is_deleted = false),
+    // so a soft-deleted row keeps its original email while the address can be re-registered.
     private String email;
 
     private String password;
@@ -34,6 +35,12 @@ public class User {
 
     @Column(name = "auth_provider")
     private String authProvider;
+
+    @Column(name = "email_verified")
+    private Boolean emailVerified;
+
+    @Column(name = "is_deleted")
+    private Boolean isDeleted;
 
     @Column(name = "ai_daily_limit")
     private Integer aiDailyLimit;
@@ -78,6 +85,12 @@ public class User {
         }
         if (this.authProvider == null) {
             this.authProvider = "EMAIL";
+        }
+        if (this.emailVerified == null) {
+            this.emailVerified = false;
+        }
+        if (this.isDeleted == null) {
+            this.isDeleted = false;
         }
     }
 

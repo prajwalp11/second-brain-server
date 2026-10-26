@@ -4,8 +4,10 @@ import com.secondbrain.second_brain_server.entities.SessionLog;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -23,4 +25,9 @@ public interface SessionLogRepository extends JpaRepository<SessionLog, UUID> {
     @Query("SELECT sl.logDate FROM SessionLog sl WHERE sl.domain.id = :domainId")
     List<LocalDate> findLogDatesByDomainId(UUID domainId);
     Long countByDomainIdAndLogDateBetween(UUID domainId, LocalDate from, LocalDate to);
+
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM SessionLog sl WHERE sl.user.id = :userId")
+    void deleteByUserId(UUID userId);
 }

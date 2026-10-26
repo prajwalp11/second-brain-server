@@ -10,6 +10,7 @@ import com.secondbrain.second_brain_server.external.GeminiClient;
 import com.secondbrain.second_brain_server.external.GeminiMessage;
 import com.secondbrain.second_brain_server.repository.DomainRepository;
 import com.secondbrain.second_brain_server.repository.TaskRepository;
+import com.secondbrain.second_brain_server.external.YouTubeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,7 +35,7 @@ public class TaskGenerationService {
     private final PromptBuilder promptBuilder;
     private final GeminiClient geminiClient;
     private final ObjectMapper objectMapper;
-    private final com.secondbrain.second_brain_server.external.YouTubeService youTubeService;
+    private final YouTubeService youTubeService;
 
     @org.springframework.beans.factory.annotation.Value("${tasks.generation.max-per-domain:5}")
     private int maxTasksPerDomain;

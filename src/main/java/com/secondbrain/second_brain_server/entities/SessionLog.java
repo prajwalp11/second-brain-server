@@ -51,9 +51,6 @@ public class SessionLog {
 
     private String linkedReferenceUrl;
 
-    @Column(columnDefinition = "TEXT")
-    private String aiInsight;
-
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
@@ -83,7 +80,6 @@ public class SessionLog {
                 .feelLabel(this.feelLabel)
                 .notes(this.notes)
                 .linkedReferenceUrl(this.linkedReferenceUrl)
-                .aiInsight(this.aiInsight)
                 .build();
     }
 }

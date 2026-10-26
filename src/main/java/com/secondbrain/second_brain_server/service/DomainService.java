@@ -4,12 +4,14 @@ import com.secondbrain.second_brain_server.dto.request.CreateDomainRequest;
 import com.secondbrain.second_brain_server.dto.request.UpdateDomainRequest;
 import com.secondbrain.second_brain_server.dto.response.DomainResponse;
 import com.secondbrain.second_brain_server.dto.response.GeneratedSystemResponse;
+import com.secondbrain.second_brain_server.dto.response.MetricDefinitionResponse;
 import com.secondbrain.second_brain_server.dto.response.TimeSeriesPointResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.entities.DomainMetricDefinition;
 import com.secondbrain.second_brain_server.entities.Milestone;
 import com.secondbrain.second_brain_server.entities.SessionLog;
 import com.secondbrain.second_brain_server.entities.Task;
+import com.secondbrain.second_brain_server.entities.User;
 import com.secondbrain.second_brain_server.enums.DomainStatus;
 import com.secondbrain.second_brain_server.enums.DomainType;
 import com.secondbrain.second_brain_server.enums.MilestoneStatus;
@@ -25,6 +27,7 @@ import com.secondbrain.second_brain_server.repository.MilestoneRepository;
 import com.secondbrain.second_brain_server.repository.SessionLogRepository;
 import com.secondbrain.second_brain_server.repository.TaskRepository;
 import com.secondbrain.second_brain_server.service.ai.AiSystemGeneratorService;
+import com.secondbrain.second_brain_server.external.YouTubeService;
 import com.secondbrain.second_brain_server.util.MetricValidator;
 import com.secondbrain.second_brain_server.util.StreakCalculator;
 import lombok.RequiredArgsConstructor;
@@ -51,7 +54,7 @@ public class DomainService {
     private final SessionLogRepository sessionLogRepository;
     private final TaskRepository taskRepository;
     private final AiSystemGeneratorService aiSystemGeneratorService;
-    private final com.secondbrain.second_brain_server.external.YouTubeService youTubeService;
+    private final YouTubeService youTubeService;
 
     public List<DomainResponse> getDomainsForUser(UUID userId) {
         return domainRepository.findByUserId(userId).stream()
@@ -85,7 +88,7 @@ public class DomainService {
         }
 
         Domain newDomain = Domain.builder()
-                .user(new com.secondbrain.second_brain_server.entities.User(userId))
+                .user(new User(userId))
                 .domainType(request.getDomainType())
                 .customName(request.getCustomName())
                 .context(request.getContext())
@@ -228,12 +231,12 @@ public class DomainService {
     }
 
     /** Persisted min for an AI-generated metric: use AI value if given, else default floor of 0. */
-    private Double resolveMinValue(com.secondbrain.second_brain_server.dto.response.MetricDefinitionResponse dto) {
+    private Double resolveMinValue(MetricDefinitionResponse dto) {
         return dto.getMinValue() != null ? dto.getMinValue() : 0.0;
     }
 
     /** Persisted max: use AI value if given, else 100 for percentage metrics, else null (open-ended). */
-    private Double resolveMaxValue(com.secondbrain.second_brain_server.dto.response.MetricDefinitionResponse dto) {
+    private Double resolveMaxValue(MetricDefinitionResponse dto) {
         if (dto.getMaxValue() != null) {
             return dto.getMaxValue();
         }

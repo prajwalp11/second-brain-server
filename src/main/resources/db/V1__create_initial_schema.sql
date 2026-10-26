@@ -9,11 +9,13 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- ============================================
 CREATE TABLE users (
                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                       email VARCHAR(255) UNIQUE,
+                       email VARCHAR(255),
                        password VARCHAR(255),
                        first_name VARCHAR(255),
                        last_name VARCHAR(255),
                        auth_provider VARCHAR(20) DEFAULT 'EMAIL',
+                       email_verified BOOLEAN DEFAULT FALSE,
+                       is_deleted BOOLEAN DEFAULT FALSE,
                        ai_daily_limit INT DEFAULT 3,
                        ai_used_today INT DEFAULT 0,
                        created_at TIMESTAMP DEFAULT NOW(),
@@ -89,7 +91,6 @@ CREATE TABLE session_logs (
                               feel_label VARCHAR(50),
                               notes TEXT,
                               linked_reference_url VARCHAR(500),
-                              ai_insight TEXT,
                               created_at TIMESTAMP DEFAULT NOW(),
                               updated_at TIMESTAMP DEFAULT NOW(),
 
@@ -364,21 +365,80 @@ ALTER TABLE users ALTER COLUMN password DROP NOT NULL;
 
 
 -- ============================================
--- PASSWORD RESET TOKENS (forgot-password flow)
--- Stores a HASH of a 6-digit code (never the raw code). Single-use, 30-min expiry.
+-- OTP TOKENS (shared by email verification, password reset, account deletion)
+-- Stores a HASH of a 6-digit code (never the raw code), keyed by purpose.
+-- Single-use, 30-min expiry, attempt-capped. Replaces the old separate
+-- password_reset_tokens / email_verification_tokens / account_deletion_tokens tables.
 -- ============================================
-CREATE TABLE IF NOT EXISTS password_reset_tokens (
+CREATE TABLE IF NOT EXISTS otp_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,
+    purpose VARCHAR(30) NOT NULL,   -- EMAIL_VERIFICATION | PASSWORD_RESET | ACCOUNT_DELETION
     token_hash VARCHAR(255) NOT NULL,
     expires_at TIMESTAMP NOT NULL,
     used BOOLEAN DEFAULT FALSE,
     attempts INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT NOW(),
-    CONSTRAINT fk_reset_token_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    CONSTRAINT fk_otp_token_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_reset_tokens_user ON password_reset_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_otp_tokens_user_purpose ON otp_tokens(user_id, purpose);
 
--- ALTER for existing DBs: brute-force attempt counter per code
-ALTER TABLE password_reset_tokens ADD COLUMN IF NOT EXISTS attempts INT DEFAULT 0;
+-- Migration: drop the old per-purpose token tables (OTPs are disposable, nothing to preserve).
+DROP TABLE IF EXISTS password_reset_tokens;
+DROP TABLE IF EXISTS email_verification_tokens;
+DROP TABLE IF EXISTS account_deletion_tokens;
+
+
+-- ============================================
+-- ALTER: Drop unused session ai_insight column
+-- The per-session AI insight was never displayed and unused by metrics/charts/PRs.
+-- ============================================
+ALTER TABLE session_logs DROP COLUMN IF EXISTS ai_insight;
+
+
+-- ============================================
+-- DOMAIN INSIGHTS (per-domain Progress-tab highlights/patterns/suggestions)
+-- Generated once/day per domain by InsightsRefreshScheduler (and on-demand via
+-- POST /api/insights/refresh?domainId=), cached here so the Progress tab reads from
+-- DB instead of calling Gemini on every load. Arrays stored as JSON text.
+-- ============================================
+CREATE TABLE IF NOT EXISTS domain_insights (
+    domain_id UUID PRIMARY KEY,
+    highlights TEXT,
+    patterns TEXT,
+    suggestions TEXT,
+    generated_at TIMESTAMP DEFAULT NOW(),
+    CONSTRAINT fk_domain_insights_domain FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE
+);
+
+
+-- ============================================
+-- ALTER: Email verification (OTP) support
+-- email_verified gates login: unverified EMAIL accounts must confirm a 6-digit code.
+-- Existing users are grandfathered to verified so they aren't locked out.
+-- ============================================
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;
+UPDATE users SET email_verified = TRUE WHERE email_verified IS NOT TRUE;
+-- (OTP codes for email verification now live in the shared otp_tokens table above.)
+
+
+-- ============================================
+-- ACCOUNT DELETION (soft-delete user, OTP + password gated)
+-- ============================================
+-- Soft-delete flag: when TRUE the user's data has been wiped and login is blocked,
+-- but the users row (and email) is retained.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
+UPDATE users SET is_deleted = FALSE WHERE is_deleted IS NULL;
+-- (OTP codes for account deletion now live in the shared otp_tokens table above.)
+
+
+-- ============================================
+-- EMAIL UNIQUENESS: active users only (partial unique index)
+-- A soft-deleted row keeps its original email, but the address stays available for
+-- re-registration. Replaces the plain UNIQUE(email) constraint.
+-- ============================================
+-- Drop the old column-level unique constraint if present (Postgres auto-names it users_email_key).
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key;
+-- Enforce uniqueness only among non-deleted users.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email_active ON users(email) WHERE is_deleted = FALSE;

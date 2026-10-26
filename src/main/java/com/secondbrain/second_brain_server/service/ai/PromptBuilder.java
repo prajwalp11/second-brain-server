@@ -51,8 +51,8 @@ public class PromptBuilder {
         prompt.append("      \"isTrackedPerSession\": boolean,\n");
         prompt.append("      \"isPR\": boolean,\n");
         prompt.append("      \"isHigherBetter\": boolean,\n");
-        prompt.append("      \"minValue\": number or null,\n");
-        prompt.append("      \"maxValue\": number or null,\n");
+        prompt.append("      \"minValue\": number or null,   // ALWAYS 0 for scores, percentages, counts, and most metrics\n");
+        prompt.append("      \"maxValue\": number or null,   // REQUIRED 100 for any 0-100 score/rating/percentage metric; null ONLY for truly open-ended, additive quantities\n");
         prompt.append("      \"displayOrder\": integer\n");
         prompt.append("    }\n");
         prompt.append("  ],\n");
@@ -74,11 +74,11 @@ public class PromptBuilder {
         prompt.append("  ]\n");
         prompt.append("}\n\n");
         prompt.append("IMPORTANT GUIDELINES:\n");
-        prompt.append("- planDescription MUST be SHORT: 1-2 sentences max. Example: '3x/week Push Pull Legs, progressive overload focus'. Do NOT write paragraphs.\n");
+        prompt.append("- planDescription MUST be SHORT: 1-2 sentences max, summarizing cadence and focus for THIS domain (e.g. frequency per week + the main emphasis). Do NOT write paragraphs.\n");
         prompt.append("- weeklySchedule: Use short 3-letter day names like 'Mon,Wed,Fri' NOT full day names.\n");
         prompt.append("- All deadlines and due dates MUST be in the future relative to today's date.\n");
-        prompt.append("- For metrics, provide at least 3-5 relevant metrics.\n");
-        prompt.append("- Metric bounds: for any percentage or 0-100 score metric (unit '%' or a score), set minValue: 0 and maxValue: 100 so it can never exceed 100%. For open-ended metrics (reps, weight, distance, minutes, count), set minValue: 0 and maxValue: null.\n");
+        prompt.append("- For metrics, provide 3-5 metrics that are the STANDARD, conventional measures a serious practitioner, coach, or teacher in this specific domain would genuinely track to gauge progress. Use metrics that are widely recognized for this activity — NEVER invent contrived, gimmicky, or oddly-specific metrics just to have a number. If unsure, prefer the obvious, commonly-used metric over a clever one.\n");
+        prompt.append("- Metric bounds (CRITICAL — follow exactly): every metric that represents a score, rating, quality, or percentage (anything conceptually on a fixed 0-100 or 0-10 scale) MUST have minValue: 0 and maxValue: 100 (use 100 even for a 0-10 scale — the app normalizes). NEVER leave maxValue null for a score/rating/percentage metric, or its weekly total will wrongly exceed the cap. Only truly open-ended, additive quantities (where a weekly total meaningfully grows and has no natural ceiling) get minValue: 0 and maxValue: null.\n");
         prompt.append("- For milestones, provide 2-3 achievable milestones with realistic deadlines.\n");
         prompt.append("- For tasks, provide 2-3 initial tasks with due dates in the next 1-2 weeks.\n\n");
         prompt.append("User Input:\n");
@@ -100,37 +100,6 @@ public class PromptBuilder {
             }
         }
         prompt.append("Generate the system now.\n");
-        return prompt.toString();
-    }
-
-    public String sessionInsight(SessionLog log, List<SessionLog> recentLogs, List<PersonalRecordResponse> prs) {
-        StringBuilder prompt = new StringBuilder();
-        prompt.append("You are an AI assistant providing insights for a user's session logs in a personal growth app.\n");
-        prompt.append("Analyze the provided session log and recent history to offer constructive feedback, highlight progress, or suggest areas for improvement.\n");
-        prompt.append("Keep the insight concise, encouraging, and actionable. Max 150 words.\n");
-        prompt.append("Current Session Log (ID: ").append(log.getId()).append(", Date: ").append(log.getLogDate().format(DATE_FORMATTER)).append("):\n");
-        prompt.append("  Domain: ").append(log.getDomain().getCustomName() != null ? log.getDomain().getCustomName() : log.getDomain().getDomainType()).append("\n");
-        prompt.append("  Duration: ").append(log.getDurationMinutes()).append(" minutes\n");
-        prompt.append("  Feel Score: ").append(log.getFeelScore()).append(" (").append(log.getFeelLabel()).append(")\n");
-        prompt.append("  Notes: ").append(log.getNotes()).append("\n");
-        if (log.getMetricValues() != null && !log.getMetricValues().isEmpty()) {
-            prompt.append("  Metrics: ").append(log.getMetricValues().stream()
-                    .map(mv -> mv.getMetricKey() + ": " + DECIMAL_FORMAT.format(mv.getNumericValue()) + mv.getUnit())
-                    .collect(Collectors.joining(", "))).append("\n");
-        }
-        if (prs != null && !prs.isEmpty()) {
-            prompt.append("  New Personal Records: ").append(prs.stream()
-                    .map(pr -> pr.getLabel() + " " + DECIMAL_FORMAT.format(pr.getValue()) + pr.getUnit())
-                    .collect(Collectors.joining(", "))).append("\n");
-        }
-
-        if (!recentLogs.isEmpty()) {
-            prompt.append("\nRecent Session History (last ").append(recentLogs.size()).append(" logs):\n");
-            recentLogs.forEach(rl -> prompt.append("  - Date: ").append(rl.getLogDate().format(DATE_FORMATTER))
-                    .append(", Duration: ").append(rl.getDurationMinutes())
-                    .append(", Feel: ").append(rl.getFeelLabel()).append("\n"));
-        }
-        prompt.append("\nProvide your insight:\n");
         return prompt.toString();
     }
 
@@ -174,7 +143,7 @@ public class PromptBuilder {
             prompt.append("Your job is to analyze the user's current plan, schedule, and progress, then propose concrete changes.\n");
             prompt.append("When proposing changes, ALWAYS include them as proposedActions in your JSON response.\n");
             prompt.append("Action types you can propose: ADJUST_PLAN (modify plan/schedule), ADD_TASK (new task), SET_MILESTONE (new milestone).\n");
-            prompt.append("Be specific: include exact schedule days, rep ranges, targets, dates.\n\n");
+            prompt.append("Be specific: include exact schedule days, concrete targets, and dates.\n\n");
         } else {
             prompt.append("MODE: DATA_QUERY\n");
             prompt.append("Your job is to answer questions about the user's ").append(domainName).append(" data.\n");
@@ -376,10 +345,11 @@ public class PromptBuilder {
         }
 
         prompt.append("INSTRUCTIONS:\n");
-        prompt.append("- Generate tasks that build on the user's recent progress (progressive overload, next logical step).\n");
+        prompt.append("- Tasks MUST follow a structured curriculum, like a well-designed syllabus for this domain: each task is the next logical step that builds on the fundamentals the user has already covered, in the order a good teacher would sequence them. Do NOT invent random, disconnected activities.\n");
+        prompt.append("- Calibrate the step size to the user's demonstrated pace and skill level: if recent progress is strong/fast, advance to a more challenging next step; if progress is slow or they are struggling, reinforce or consolidate the current level before advancing. The same domain should produce different next steps for a fast learner vs. a struggling beginner.\n");
         prompt.append("- Tasks should align with their weekly schedule days.\n");
         prompt.append("- Due dates MUST be within the next 7 days, starting from tomorrow.\n");
-        prompt.append("- Each task should be specific and actionable (e.g. 'Bench press: aim for 3x8 at 82.5kg' not 'Do chest workout').\n");
+        prompt.append("- Each task should be specific and actionable, with concrete targets drawn from this domain's own metrics and skill level — not vague (prefer a measurable, named action over 'do some practice').\n");
         prompt.append("- If the user has been feeling tired/rough, suggest lighter recovery sessions.\n");
         prompt.append("- If streak is 0 or low, prioritize getting them back on track with achievable tasks.\n\n");
 
@@ -389,31 +359,10 @@ public class PromptBuilder {
         prompt.append("    \"title\": \"string (concise, max 60 chars)\",\n");
         prompt.append("    \"description\": \"string (1-2 sentences with specifics)\",\n");
         prompt.append("    \"dueDate\": \"YYYY-MM-DD\",\n");
-        prompt.append("    \"videoTopic\": \"string: a short, generic YouTube search phrase (3-6 words) for a tutorial that teaches the SKILL behind this task — NOT the literal task text. Focus on the technique/concept a beginner would search. E.g. task 'Bench 3x8 at 82.5kg' -> 'proper bench press form technique'; task 'Review chapter 3 vocab' -> 'Spanish vocabulary memorization tips'.\"\n");
+        prompt.append("    \"videoTopic\": \"string: a short, generic YouTube search phrase (3-6 words) for a tutorial that teaches the SKILL or concept behind this task — NOT the literal task text. Strip any personal numbers/targets and describe the underlying technique a learner would search for.\"\n");
         prompt.append("  }\n");
         prompt.append("]\n");
 
-        return prompt.toString();
-    }
-
-    public String weeklyInsight(List<WeeklyStatResponse> stats, List<PersonalRecordResponse> prs) {
-        StringBuilder prompt = new StringBuilder();
-        prompt.append("You are an AI assistant providing a weekly review insight for a user in a personal growth app.\n");
-        prompt.append("Analyze the provided weekly statistics and any new personal records to offer a summary of progress, highlight achievements, and suggest focus areas for the upcoming week.\n");
-        prompt.append("Keep the insight concise, encouraging, and actionable. Max 200 words.\n");
-        if (!stats.isEmpty()) {
-            prompt.append("\nWeekly Statistics:\n");
-            stats.forEach(ws -> prompt.append("  - ").append(ws.getDomainName()).append(" - ").append(ws.getLabel())
-                    .append(": ").append(DECIMAL_FORMAT.format(ws.getValue())).append(ws.getUnit())
-                    .append(ws.getTarget() != null ? " (Target: " + DECIMAL_FORMAT.format(ws.getTarget()) + ws.getUnit() + ")" : "")
-                    .append("\n"));
-        }
-        if (!prs.isEmpty()) {
-            prompt.append("\nNew Personal Records this week:\n");
-            prs.forEach(pr -> prompt.append("  - ").append(pr.getLabel()).append(" ").append(DECIMAL_FORMAT.format(pr.getValue())).append(pr.getUnit())
-                    .append(" (Previous: ").append(DECIMAL_FORMAT.format(pr.getPreviousValue())).append(pr.getUnit()).append(")\n"));
-        }
-        prompt.append("\nProvide your weekly insight:\n");
         return prompt.toString();
     }
 

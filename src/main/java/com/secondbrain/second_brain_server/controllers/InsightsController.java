@@ -18,8 +18,15 @@ public class InsightsController {
 
     private final InsightsService insightsService;
 
+    /** Read cached insights for a domain (no AI call). */
     @GetMapping
-    public ResponseEntity<InsightsResponse> getInsights(@CurrentUser UUID userId) {
-        return ResponseEntity.ok(insightsService.getInsights(userId));
+    public ResponseEntity<InsightsResponse> getInsights(@RequestParam UUID domainId, @CurrentUser UUID userId) {
+        return ResponseEntity.ok(insightsService.getInsights(userId, domainId));
+    }
+
+    /** Manually regenerate + cache insights for a domain (triggers the Gemini call). */
+    @PostMapping("/refresh")
+    public ResponseEntity<InsightsResponse> refreshInsights(@RequestParam UUID domainId, @CurrentUser UUID userId) {
+        return ResponseEntity.ok(insightsService.generateAndStore(userId, domainId));
     }
 }

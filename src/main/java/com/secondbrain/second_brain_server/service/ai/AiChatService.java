@@ -24,6 +24,7 @@ import com.secondbrain.second_brain_server.exception.ValidationException;
 import com.secondbrain.second_brain_server.external.GeminiClient;
 import com.secondbrain.second_brain_server.external.GeminiMessage;
 import com.secondbrain.second_brain_server.repository.AiConversationRepository;
+import com.secondbrain.second_brain_server.repository.UserRepository;
 import com.secondbrain.second_brain_server.repository.AiMessageRepository;
 import com.secondbrain.second_brain_server.service.DomainService;
 import com.secondbrain.second_brain_server.service.MilestoneService;
@@ -57,7 +58,7 @@ public class AiChatService {
     private final MilestoneService milestoneService;
     private final DomainService domainService;
     private final ObjectMapper objectMapper;
-    private final com.secondbrain.second_brain_server.repository.UserRepository userRepository;
+    private final UserRepository userRepository;
 
     // ─── Chat ────────────────────────────────────────────────────────────────────
 

@@ -11,7 +11,6 @@ import com.secondbrain.second_brain_server.exception.ForbiddenException;
 import com.secondbrain.second_brain_server.exception.ResourceNotFoundException;
 import com.secondbrain.second_brain_server.repository.SessionLogRepository;
 import com.secondbrain.second_brain_server.repository.SessionMetricValueRepository;
-import com.secondbrain.second_brain_server.service.ai.AiInsightService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -35,8 +34,6 @@ public class SessionLogService {
     private final DomainService domainService;
     private final PersonalRecordService prService;
     private final MilestoneService milestoneService;
-    private final TaskService taskService;
-    private final AiInsightService aiInsightService;
 
     @Transactional
     public SessionLogResponse createLog(UUID userId, CreateSessionLogRequest request) {
@@ -65,9 +62,8 @@ public class SessionLogService {
         List<PersonalRecordResponse> newPrs = prService.checkAndUpdatePrs(savedLog, clampedMetrics);
         milestoneService.updateProgress(domain.getId());
         domainService.updateStreakForDomain(domain, request.getLogDate());
-        taskService.markDueTasksDoneForDomain(domain.getId(), request.getLogDate());
-
-        aiInsightService.generateSessionInsight(savedLog, newPrs);
+        // Note: tasks are NOT auto-completed on log. The user explicitly picks which task
+        // they're logging (if any) in the Log tab, and that task is completed separately.
 
         return buildDto(savedLog, newPrs);
     }

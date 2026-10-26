@@ -21,9 +21,11 @@ package "entities" {
   class User {
     - id : UUID <<PK>>
     - name : String
-    - email : String <<unique>>
+    - email : String <<unique among active users — partial index WHERE is_deleted=false>>
     - passwordHash : String <<nullable for SSO users>>
     - authProvider : String <<EMAIL|GOOGLE|APPLE>>
+    - emailVerified : Boolean
+    - isDeleted : Boolean <<soft-delete: data wiped, login blocked, row+email kept>>
     
     - profilePictureUrl : String
     - timezone : String
@@ -35,24 +37,29 @@ package "entities" {
     + toDto() : UserDto
   }
 
-  class PasswordResetToken {
+  class OtpToken {
     - id : UUID <<PK>>
     - userId : UUID <<FK>>
+    - purpose : OtpPurpose <<enum>>
     - tokenHash : String
     - expiresAt : LocalDateTime
     - used : boolean
     - attempts : int
     - createdAt : LocalDateTime
   }
-  note right of PasswordResetToken
-    Stores a HASH of a 6-digit code (never the
-    raw code). Single-use, configurable expiry
-    (auth.password-reset.expiry-ms). Emailed via
-    Resend. Send-rate limited (max-requests per
-    request-window-hours, default 3/12h) and
-    brute-force limited (attempts >= max-attempts,
-    default 10, invalidates the code). Old codes
-    invalidated when a new one is issued.
+  note right of OtpToken
+    Single shared OTP table (otp_tokens) for ALL auth
+    flows — purpose = EMAIL_VERIFICATION | PASSWORD_RESET
+    | ACCOUNT_DELETION. Stores a HASH of a 6-digit code
+    (never the raw code). Single-use, configurable expiry
+    (auth.otp.expiry-ms). Emailed via Resend. Send-rate
+    limited (auth.otp.max-requests per request-window-hours,
+    default 5/12h) and brute-force limited (attempts >=
+    auth.otp.max-attempts, default 10). Old codes of the same
+    purpose invalidated when a new one is issued. Hourly
+    cleanup via OtpTokenCleanupScheduler. Issued/verified
+    through AuthService.issueOtp()/consumeOtp() helpers —
+    no per-purpose duplication.
   end note
 
   class JobExecutionLog {
@@ -137,7 +144,6 @@ package "entities" {
     - feelLabel : FeelLabel <<enum>>
     - notes : String
     - linkedReferenceUrl : String
-    - aiInsight : String
     - createdAt : LocalDateTime
     --
     + toDto() : SessionLogDto
@@ -147,9 +153,23 @@ package "entities" {
     notes = free text for any detail
     user wants — e.g. "4 sets bench:
     60/65/67.5/70kg". Not queried.
-    aiInsight written async after save.
     No exerciseData column.
     No JSONB. No special gym handling.
+  end note
+
+  class DomainInsight {
+    - domainId : UUID <<PK/FK>>
+    - highlights : String <<JSON>>
+    - patterns : String <<JSON>>
+    - suggestions : String <<JSON>>
+    - generatedAt : LocalDateTime
+  }
+  note right of DomainInsight
+    One row per DOMAIN. Cached Progress-tab
+    insights, generated from that domain's real
+    data (logs, streak, PRs, milestones, weekly
+    stats). Written by InsightsRefreshScheduler
+    (3 AM) + manual refresh; read by GET /api/insights?domainId.
   end note
 
   class SessionMetricValue {
@@ -523,7 +543,6 @@ package "dto_response" {
     + notes : String
     + linkedReferenceUrl : String
     + metrics : Map<String, Double>
-    + aiInsight : String
     + newPrs : List<PersonalRecordDto>
   }
   note right of SessionLogDto
@@ -693,6 +712,7 @@ package "repositories" {
     + findMetricTimeSeries(domainId: UUID, metricKey: String, from: LocalDate, to: LocalDate) : List<TimeSeriesProjection>
     + findMaxValueForMetric(domainId: UUID, metricKey: String) : Optional<Double>
     + sumMetricForPeriod(domainId: UUID, metricKey: String, from: LocalDate, to: LocalDate) : Optional<Double>
+    + avgMetricForPeriod(domainId: UUID, metricKey: String, from: LocalDate, to: LocalDate) : Optional<Double>
   }
   note right of SessionMetricValueRepository
     findMetricTimeSeries JPQL:
@@ -746,29 +766,66 @@ package "repositories" {
 package "services" {
   class AuthService {
     - userRepository : UserRepository
-    - passwordResetTokenRepository : PasswordResetTokenRepository
+    - otpTokenRepository : OtpTokenRepository
+    - accountDeletionService : AccountDeletionService
     - emailService : EmailService
     - jwtUtil : JwtUtil
     - passwordEncoder : PasswordEncoder
-    - resetExpiryMs : long <<@Value>>
-    - resetMaxRequests : int <<@Value>>
-    - resetWindowHours : int <<@Value>>
-    - resetMaxAttempts : int <<@Value>>
+    - otpExpiryMs : long <<@Value auth.otp.expiry-ms>>
+    - otpMaxRequests : int <<@Value auth.otp.max-requests>>
+    - otpWindowHours : int <<@Value auth.otp.request-window-hours>>
+    - otpMaxAttempts : int <<@Value auth.otp.max-attempts>>
     --
     + register(request: RegisterRequest) : String
     + login(request: LoginRequest) : AuthResponse
-    + forgotPassword(email: String) : void
+    + forgotPassword(email: String) : boolean
     + resetPassword(email: String, code: String, newPassword: String) : void
+    + verifyEmail(email: String, code: String) : void
+    + resendVerification(email: String) : void
+    + requestAccountDeletion(userId: UUID) : void
+    + deleteAccount(userId: UUID, code: String, password: String) : void
     + logout(userId: UUID) : void
     + getProfile(userId: UUID) : UserDto
     + updateProfile(userId: UUID, request: UpdateProfileRequest) : UserDto
+    - issueOtp(user: User, purpose: OtpPurpose) : String
+    - consumeOtp(userId: UUID, purpose: OtpPurpose, code: String) : void
     - buildAuthResponse(user: User) : AuthResponse
   }
+  note left of AuthService
+    register() creates an unverified account + emails an OTP.
+    login() throws EmailNotVerifiedException (HTTP 403,
+    "EMAIL_NOT_VERIFIED") if email_verified=false (re-sends a
+    code), and rejects soft-deleted accounts (is_deleted=true).
+    ALL OTP flows (verify / reset / delete) share issueOtp()
+    + consumeOtp() over one otp_tokens table keyed by
+    OtpPurpose — no per-purpose duplication.
+    deleteAccount() requires OTP + current password, delegates
+    data removal to AccountDeletionService, then soft-deletes
+    the user row (is_deleted=true, password cleared, email kept).
+  end note
+  class AccountDeletionService {
+    - domainRepository : DomainRepository
+    - sessionLogRepository : SessionLogRepository
+    - taskRepository : TaskRepository
+    - personalRecordRepository : PersonalRecordRepository
+    - aiNudgeRepository : AiNudgeRepository
+    - aiConversationRepository : AiConversationRepository
+    --
+    + wipeUserData(userId: UUID) : void
+  }
+  note right of AccountDeletionService
+    Deletes all user-owned rows in FK-safe order; DB
+    ON DELETE CASCADE removes domain-scoped children,
+    session metric values and ai_messages. Extracted from
+    AuthService so the many delete repos don't bloat it (SRP).
+  end note
   class EmailService {
     - resendApiKey : String <<@Value RESEND_API_KEY>>
     - mailFrom : String <<@Value MAIL_FROM>>
     --
     + sendPasswordResetCode(toEmail: String, code: String) : void
+    + sendVerificationCode(toEmail: String, code: String) : void
+    + sendAccountDeletionCode(toEmail: String, code: String) : void
   }
   note right of EmailService
     Sends via Resend HTTP API. Failures are
@@ -817,7 +874,6 @@ package "services" {
     - domainService : DomainService
     - prService : PersonalRecordService
     - milestoneService : MilestoneService
-    - aiInsightService : AiInsightService
     --
     + createLog(userId: UUID, request: CreateSessionLogRequest) : SessionLogDto
     + getLogsForDomain(domainId: UUID, userId: UUID, pageable: Pageable) : Page<SessionLogDto>
@@ -831,16 +887,17 @@ package "services" {
   note right of SessionLogService
     createLog() @Transactional steps:
     1. assertDomainOwnership
-    2. validateMetricKeys
+    2. validateMetricKeys + clamp values
     3. save SessionLog
     4. bulk insert SessionMetricValues
     5. prService.checkAndUpdatePrs()
     6. milestoneService.updateProgress()
-    7. domainService.updateStreak()
-    8. taskService.markDueTasksDone()
-    9. aiInsightService.generate() @Async
-    10. return dto with newPrs[]
-    Steps 1-8 atomic. Step 9 async.
+    7. domainService.updateStreakForDomain() (streak recomputed + saved immediately)
+    8. return dto with newPrs[]
+    (Tasks are NOT auto-completed on log — the user
+    explicitly picks which task they logged in the app,
+    which completes only that task. Per-session AI insight
+    generation also removed — was never displayed/used.)
   end note
   class PersonalRecordService {
     - prRepository : PersonalRecordRepository
@@ -917,9 +974,16 @@ package "services" {
     --
     + getWeeklyStats(userId: UUID, weekStart: LocalDate) : List<WeeklyStatDto>
     + getWeeklyStatForDomain(domainId: UUID, weekStart: LocalDate) : WeeklyStatDto
-    - aggregateMetric(domainId: UUID, metricKey: String, from: LocalDate, to: LocalDate) : Double
+    - aggregateMetric(domainId: UUID, metric: DomainMetricDefinition, from: LocalDate, to: LocalDate) : Double
     - resolveTarget(domain: Domain, metricKey: String) : Double
   }
+  note right of WeeklyStatService
+    aggregateMetric: bounded metrics (maxValue != null,
+    e.g. 0-100 score) are AVERAGED over the week and
+    clamped to [minValue, maxValue]; open-ended metrics
+    (maxValue == null) are SUMMED. Prevents score metrics
+    from exceeding their cap in the weekly snapshot.
+  end note
   class ProgressService {
     - sessionMetricValueRepository : SessionMetricValueRepository
     - milestoneService : MilestoneService
@@ -974,20 +1038,25 @@ package "service.ai" {
     so every new domain gets correct
     tracking setup automatically.
   end note
-  class AiInsightService {
+  class InsightsService {
     - geminiClient : GeminiClient
-    - promptBuilder : PromptBuilder
-    - sessionLogRepository : SessionLogRepository
-    - prRepository : PersonalRecordRepository
+    - userContextAssembler : UserContextAssembler
+    - domainInsightRepository : DomainInsightRepository
+    - domainService : DomainService
+    - objectMapper : ObjectMapper
     --
-    + generateSessionInsight(log: SessionLog, newPrs: List<PersonalRecordDto>) : void
-    + generateWeeklyInsight(userId: UUID, domainId: UUID) : String
+    + getInsights(userId: UUID, domainId: UUID) : InsightsDto
+    + generateAndStore(userId: UUID, domainId: UUID) : InsightsDto
   }
-  note right of AiInsightService
-    generateSessionInsight() @Async.
-    Fetches last 5 logs for context.
-    Writes to SessionLog.aiInsight.
-    User sees it on next GET /logs/{id}.
+  note right of InsightsService
+    PER-DOMAIN. getInsights() READ-ONLY (cached
+    domain_insights row, no AI; else short fallback).
+    generateAndStore() builds a prompt from that
+    domain's real data (logs, streak, PRs, milestones,
+    weekly stats) via assembleForDomain, calls Gemini
+    (items <= 8 words), caches. Ownership-checked.
+    Called by InsightsRefreshScheduler (3 AM, per
+    active domain) + POST /api/insights/refresh?domainId.
   end note
   class AiChatService {
     - geminiClient : GeminiClient
@@ -1184,6 +1253,10 @@ package "controllers" {
     + login(request: LoginRequest) : ResponseEntity<AuthResponse>
     + forgotPassword(request: ForgotPasswordRequest) : ResponseEntity<Void>
     + resetPassword(request: ResetPasswordRequest) : ResponseEntity<Void>
+    + verifyEmail(request: VerifyEmailRequest) : ResponseEntity<Void>
+    + resendVerification(request: ForgotPasswordRequest) : ResponseEntity<Void>
+    + requestAccountDeletion(userId: UUID) : ResponseEntity<Void>
+    + deleteAccount(userId: UUID, request: DeleteAccountRequest) : ResponseEntity<Void>
     + logout() : ResponseEntity<Void>
   }
   note right of AuthController
@@ -1438,11 +1511,19 @@ package "scheduler" {
     streaks, weekly stats, and feel patterns.
     Tasks are progressive — not repetitive.
   end note
-  class WeeklyReviewScheduler {
-    - aiInsightService : AiInsightService
+  class InsightsRefreshScheduler {
+    - domainRepository : DomainRepository
+    - insightsService : InsightsService
+    - jobLogService : JobLogService
     --
-    + runWeekly() : void
+    + refreshInsights() : void
   }
+  note right of InsightsRefreshScheduler
+    Runs 3 AM daily. Regenerates cached
+    domain_insights for every ACTIVE domain
+    (per-domain) so the Progress tab never
+    calls Gemini on load. Wrapped in JobLogService.
+  end note
   class TokenCleanupScheduler {
     --
     + cleanExpired() : void

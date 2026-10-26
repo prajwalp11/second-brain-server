@@ -47,7 +47,7 @@ public class WeeklyStatService {
         List<DomainMetricDefinition> metrics = metricDefinitionRepository.findByDomainIdOrderByDisplayOrder(domain.getId());
 
         for (DomainMetricDefinition metric : metrics) {
-            Double aggregatedValue = aggregateMetric(domain.getId(), metric.getMetricKey(), weekStart, weekEnd);
+            Double aggregatedValue = aggregateMetric(domain.getId(), metric, weekStart, weekEnd);
             Double target = resolveTarget(domain, metric.getMetricKey());
 
             domainWeeklyStats.add(WeeklyStatResponse.builder()
@@ -63,7 +63,19 @@ public class WeeklyStatService {
         return domainWeeklyStats;
     }
 
-    private Double aggregateMetric(UUID domainId, String metricKey, LocalDate from, LocalDate to) {
+    /**
+     * Bounded/score metrics (those with a defined maxValue, e.g. a 0-100 technique score) are
+     * AVERAGED over the week and clamped to their [min, max] range, so they never exceed the cap.
+     * Unbounded cumulative metrics (minutes practiced, pages read, reps) are SUMMED.
+     */
+    private Double aggregateMetric(UUID domainId, DomainMetricDefinition metric, LocalDate from, LocalDate to) {
+        String metricKey = metric.getMetricKey();
+        if (metric.getMaxValue() != null) {
+            Double avg = sessionMetricValueRepository.avgMetricForPeriod(domainId, metricKey, from, to).orElse(0.0);
+            double min = metric.getMinValue() != null ? metric.getMinValue() : 0.0;
+            double max = metric.getMaxValue();
+            return Math.max(min, Math.min(max, avg));
+        }
         return sessionMetricValueRepository.sumMetricForPeriod(domainId, metricKey, from, to).orElse(0.0);
     }
 

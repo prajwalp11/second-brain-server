@@ -337,3 +337,125 @@ Run `ALTER TABLE password_reset_tokens ADD COLUMN IF NOT EXISTS attempts INT DEF
 - **Configurable:** LOG_DIR, LOG_MAX_FILE_SIZE, LOG_MAX_HISTORY, LOG_TOTAL_SIZE_CAP env vars (defaults in .env.example). Console logging unchanged (journalctl still works).
 - Purpose: persistent, greppable logs for debugging email/AI issues without relying on the IntelliJ console or journal scrollback.
   - `tail -f /home/ubuntu/logs/app.log` or `grep -i email /home/ubuntu/logs/app.log`.
+
+## Session Log — Insights Caching, AI Cost Cleanup, Dead-Code Removal
+
+### Removed per-session AI insight (dead cost)
+`session_logs.ai_insight` was generated via Gemini on every session log but never displayed or used in any metric/chart/PR. Fully removed: call site in SessionLogService, the field (entity + toResponse + SessionLogResponse DTO + app type), and the column (`ALTER TABLE session_logs DROP COLUMN IF EXISTS ai_insight`). Deleted the now-orphaned `AiInsightService`, `PromptBuilder.sessionInsight`, `PromptBuilder.weeklyInsight`, and the dead `WeeklyReviewScheduler` (empty no-op that was scaffolding for an unbuilt weekly-review feature).
+
+### Progress-tab insights now cached (no per-load AI call)
+Previously `InsightsService.getInsights` called Gemini on EVERY Progress tab load (slow + costly).
+- New `user_insights` table (one row/user: highlights/patterns/suggestions as JSON TEXT + generated_at) + `UserInsight` entity + `UserInsightRepository`.
+- `InsightsService.getInsights` is now READ-ONLY: returns cached row (no AI) else short computed fallbacks.
+- `InsightsService.generateAndStore` does the Gemini call + caches — called only by the cron.
+- **Shortened output:** AI prompt now requires each item ≤ 8 words, punchy; all fallback strings rewritten short (e.g. "Gym idle 5d — jump back in").
+- New `InsightsRefreshScheduler` — 3 AM daily, iterates users, `generateAndStore`, wrapped in `JobLogService` (audited in job_execution_logs like all schedulers).
+
+### Deploy (prod SQL)
+`ALTER TABLE session_logs DROP COLUMN IF EXISTS ai_insight;` + `CREATE TABLE user_insights (...)` (both in schema file). Then jar + restart. First Progress loads show fallback text until the 3 AM cron populates user_insights.
+
+### Dead code removed (prod hygiene)
+AiInsightService, WeeklyReviewScheduler, PromptBuilder.sessionInsight/weeklyInsight — all deleted. Verified no remaining references.
+
+## Session Log — Insights Manual Refresh + Setup Note Simplified
+
+- **Manual insights refresh:** added `POST /api/insights/refresh` (InsightsController) → `insightsService.generateAndStore(userId)` then returns the fresh insights. Lets you regenerate on demand without waiting for the 3 AM cron (useful right after deploy / testing).
+- App: `refreshInsights()` service fn (timeout 0, since it triggers a Gemini call) + a refresh icon on the Progress tab's AI Insights section header (spinner while running).
+- **Insights input is per-USER, one call per user** (not per-domain): prompt feeds aggregate counts (domains, recent logs, PRs) from UserContextAssembler.assemble(userId). NOTE: this is intentionally light input — insights are generic. Enriching the prompt with per-domain detail (streaks/progress/feel) is a future improvement.
+- **Setup-review note** simplified to: "You can edit your plan, schedule, and tasks anytime from the AI chat."
+
+## Session Log — Insights Reworked to PER-DOMAIN (correction)
+
+Earlier insights were account-wide (one row/user, fed only aggregate counts) — wrong, since the Progress tab is per-domain. Reworked to per-domain:
+- **Table:** `user_insights` → **`domain_insights`** (PK domain_id, FK→domains ON DELETE CASCADE). JSON columns highlights/patterns/suggestions + generated_at. (user_id not stored — ownership derived via domain.)
+- **InsightsService:** now `getInsights(userId, domainId)` (read-only, ownership-checked) and `generateAndStore(userId, domainId)`. Prompt built from that domain's REAL data via `UserContextAssembler.assembleForDomain` — recent logs (duration/feel/metrics), streak, PRs, active milestones, weekly stats. Items ≤8 words. Fallback is short + domain-specific.
+- **Endpoints:** `GET /api/insights?domainId=` and `POST /api/insights/refresh?domainId=` (manual, per domain per user).
+- **InsightsRefreshScheduler (3 AM):** iterates every ACTIVE domain, generateAndStore per domain. Cost note: now 1 Gemini call per active domain/day (was per user).
+- Deleted UserInsight entity + UserInsightRepository.
+- App: Progress tab loads/refreshes insights for the SELECTED domain (moved out of loadInitial into the per-domain effect; refresh + pull-to-refresh pass domainId).
+
+### Deploy SQL
+`CREATE TABLE domain_insights (...)` (replaces user_insights — if you already created user_insights on prod, drop it: `DROP TABLE IF EXISTS user_insights;`).
+
+## Session Log — Email Verification (OTP) on Signup
+
+### Flow
+Signup creates an UNVERIFIED account + emails a 6-digit OTP → app routes to verify screen → `POST /auth/verify-email` flips `email_verified=true`. **Login is gated:** an unverified EMAIL account can't log in — `login` throws `EmailNotVerifiedException` (HTTP 403, body message `EMAIL_NOT_VERIFIED`) AND re-sends a code, so the app routes to the OTP screen on every unverified login attempt (handles the back-button-after-signup case).
+
+### Backend
+- **users.email_verified BOOLEAN DEFAULT FALSE** (CREATE + ALTER). Existing users grandfathered: `UPDATE users SET email_verified = TRUE`.
+- **email_verification_tokens** table + `EmailVerificationToken` entity + repo — identical OTP pattern to password reset (hash, expiry, single-use, attempts).
+- **AuthService:** `register` → unverified + `sendVerificationCodeFor`; `verifyEmail(email, code)`; `resendVerification(email)`; `login` gate. Reuses the `hashCode` SHA-256 helper.
+- **EmailService.sendVerificationCode** (reuses Resend path).
+- **Exception:** `EmailNotVerifiedException` → 403 `EMAIL_NOT_VERIFIED` in GlobalExceptionHandler.
+- **Endpoints:** `POST /auth/verify-email`, `POST /auth/resend-verification` (resend reuses ForgotPasswordRequest {email}). New DTO `VerifyEmailRequest {email, code}`.
+- **Cleanup:** the hourly PasswordResetTokenCleanupScheduler now also purges email_verification_tokens.
+
+### Config — CONSOLIDATED
+Password-reset + email-verification now share ONE config namespace **auth.otp.*** (AUTH_OTP_EXPIRY_MS / MAX_REQUESTS / WINDOW_HOURS / MAX_ATTEMPTS). Replaced the separate password-reset.* and email-verification.* props (8 → 4). NOTE: password reset send cap changed 3 → 5 as a side effect of sharing AUTH_OTP_MAX_REQUESTS=5.
+
+### App
+New `(auth)/verify-email.tsx` OTP screen; register routes to it; login catches 403 EMAIL_NOT_VERIFIED → routes to it; root `_layout` gate allows verify-email for logged-out users. Services: `verifyEmail`, `resendVerification`.
+
+### SDK 58 bump fixes (unrelated but required for green build)
+`(tabs)/_layout.tsx` tabBarIcon color cast to string; `ai.tsx` scrollRef typed `ComponentRef<typeof ScrollView>`. App tsc now fully green.
+
+### Deploy SQL
+`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;` + `UPDATE users SET email_verified = TRUE;` (grandfather) + `CREATE TABLE email_verification_tokens (...)`.
+
+## Session Log — Log Flow Rework, Weekly Snapshot Fix, Prompt Hardening
+
+### Session log no longer auto-completes tasks (bug fix)
+- **Problem:** `SessionLogService.createLog` called `taskService.markDueTasksDoneForDomain(domainId, logDate)`, which marked **every** TODO/IN_PROGRESS task due ≤ logDate as DONE — so logging one session wrongly completed unrelated tasks (e.g. logging a workout completed "buy equipment").
+- **Fix:** removed that call from `createLog` and **deleted** `TaskService.markDueTasksDoneForDomain` (now dead) + the unused `taskService` field from `SessionLogService`.
+- **New model:** task completion is now explicit — the app's Log tab shows today's open tasks for the picked domain and the user chooses which one they're logging; that single task is marked DONE via the existing `PUT /tasks/{id}/status`. No server change needed for completion beyond removing the auto-sweep.
+
+### Weekly snapshot: average bounded metrics instead of summing (bug fix)
+- **Problem:** `WeeklyStatService.aggregateMetric` always SUMMED a metric over the week. For bounded score/rating metrics (0–100) this pushed the weekly value far past the cap (e.g. a technique score summing to 400+).
+- **Fix:** `aggregateMetric` now branches on the metric's existing `maxValue`:
+  - `maxValue != null` (bounded/score/percentage) → **AVERAGE** over the week, then clamp to `[minValue, maxValue]`.
+  - `maxValue == null` (open-ended: time, counts, distance…) → **SUM** (unchanged).
+- **Repo:** added `SessionMetricValueRepository.avgMetricForPeriod(...)` mirroring `sumMetricForPeriod`.
+- Uses the **existing** per-metric `minValue`/`maxValue` columns — no new fields. Applies to both `/dashboard/weekly-snapshot` and the Home dashboard (same service).
+- **Note:** this only self-heals metrics that actually have `maxValue` set. Legacy score metrics created with a NULL `maxValue` still sum — fix by either regenerating the domain (prompt now reliably sets bounds) or a one-off `UPDATE domain_metric_definitions SET max_value = 100, min_value = 0 WHERE metric_key = '<key>';`.
+
+### PromptBuilder hardening (domain-agnostic)
+- **Metric bounds rule** rewritten as CRITICAL + annotated inline in the JSON spec so the AI reliably sets `maxValue: 100` for any score/rating/percentage metric (never null), and `null` only for truly open-ended additive quantities.
+- **Metric selection:** must be the STANDARD, conventional measures a practitioner/coach in that domain actually tracks — never contrived/gimmicky metrics.
+- **Task generation:** must follow a STRUCTURED curriculum (syllabus-style next step building on fundamentals), and calibrate step size to the user's demonstrated pace/skill (fast learner → harder next step; struggling → consolidate).
+- Removed all hardcoded domain-specific examples from the prompt (no "Push Pull Legs", "bench 3x8", "Spanish vocab", "breathing technique score", "rep ranges") — the app is domain-agnostic.
+
+### Insights manual refresh (app button removed)
+- The app's manual "refresh insights" button was a dev convenience. Removed from the app (button + handler + service fn). Insights now come **only** from the 3 AM scheduler. The backend `POST /api/insights/refresh?domainId=` endpoint is **kept** for manual/Postman calls.
+
+### Postman
+- Fixed Insights "Get AI Insights" to include required `?domainId=`; added "Refresh AI Insights (manual)" request.
+
+### Streaks (already instant — no change)
+- Confirmed `createLog` → `DomainService.updateStreakForDomain` recomputes via `StreakCalculator` and **saves immediately** on every log. Streak is correct in the DB the instant a session is logged; any perceived lag is a client refresh timing issue, not server.
+
+### Deploy SQL
+No new tables this batch. If fixing a legacy unbounded score metric, run the `UPDATE domain_metric_definitions SET max_value = 100 ...` noted above.
+
+## Session Log — Account Deletion (OTP + password) + OTP Token Consolidation
+
+### Shared OTP token (refactor — removed 3x duplication)
+- Replaced the three separate tables/entities/repos (`password_reset_tokens`, `email_verification_tokens`, and a briefly-added `account_deletion_tokens`) with ONE `otp_tokens` table + `OtpToken` entity + `OtpPurpose` enum (`EMAIL_VERIFICATION|PASSWORD_RESET|ACCOUNT_DELETION`) + `OtpTokenRepository`.
+- Collapsed the duplicated issue/verify logic into two shared `AuthService` helpers: `issueOtp(user, purpose)` (rate-limit + invalidate-old + store-hashed, returns raw code or null if limited) and `consumeOtp(userId, purpose, code)` (expiry/hash/attempt-cap validation + mark used). forgot/reset/verify/resend/request-delete/delete all route through these.
+- Deleted old entities/repos + `PasswordResetTokenCleanupScheduler`; new `OtpTokenCleanupScheduler` (hourly, one `deleteUsedOrExpired` over all purposes).
+
+### Account deletion (soft-delete user, wipe data; OTP + password gated)
+- `users.is_deleted` BOOLEAN flag (CREATE + idempotent ALTER + grandfather). `login` rejects soft-deleted accounts.
+- `AuthService.requestAccountDeletion(userId)` emails an OTP; `deleteAccount(userId, code, password)` verifies **current password AND OTP**, then wipes data and soft-deletes (is_deleted=true, password cleared, **email retained on the row**).
+- **Email re-registration:** email uniqueness is enforced by a **partial unique index** `UNIQUE(email) WHERE is_deleted = false` (replaces the plain UNIQUE constraint), so a soft-deleted row keeps its exact original email yet the address can be registered again. All email lookups (`register` existence check, `login`, reset/verify/resend, and `UserDetailsServiceImpl.loadUserByUsername`) use the active-only `...AndIsDeletedFalse` repo methods; the plain `findByEmail`/`existsByEmail` were removed. A soft-deleted account therefore cannot log in, reset, or verify.
+- **Data wipe extracted to `AccountDeletionService.wipeUserData(userId)`** (SRP — keeps AuthService from injecting 6 extra delete repos; AuthService went 11→5 beans). Deletes PRs, tasks, session logs, nudges, AI conversations, domains; DB `ON DELETE CASCADE` handles metric defs/milestones/insights/metric-values/ai-messages.
+- Added bulk `deleteByUserId` (`@Modifying @Query`) to Domain/Task/PersonalRecord/SessionLog/AiNudge/AiConversation repos.
+- `EmailService.sendAccountDeletionCode`; `DeleteAccountRequest {code, password}` DTO; endpoints `POST /auth/request-account-deletion` + `POST /auth/delete-account` (both @CurrentUser).
+
+### Deploy SQL
+`CREATE TABLE otp_tokens (...)` + `ALTER TABLE users ADD COLUMN IF NOT EXISTS is_deleted ...` + grandfather UPDATE + `DROP TABLE IF EXISTS password_reset_tokens / email_verification_tokens / account_deletion_tokens` (OTPs are disposable) + `ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key` + `CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email_active ON users(email) WHERE is_deleted = FALSE`. All idempotent in V1.
+
+## Session Log — Weekly Snapshot + Streak + Prompt (earlier this session)
+- **Weekly snapshot bug:** `WeeklyStatService.aggregateMetric` now AVERAGES bounded metrics (maxValue != null) over the week and clamps to [min,max]; SUMS open-ended ones. Added `SessionMetricValueRepository.avgMetricForPeriod`. Fixes score metrics (0-100) exceeding cap.
+- **Streak logic:** `StreakCalculator.compute` now counts ANY logged day toward the streak; the weekly schedule only BREAKS it (a past scheduled day with no log). Today never counts as a missed day. Streak remains cached in `domains.current_streak/longest_streak`, recomputed on log / midnight scheduler / manual recalc.
+- **PromptBuilder hardening (domain-agnostic):** metric bounds rule made CRITICAL + annotated in JSON spec (score/rating/% ⇒ min 0/max 100, never null); metrics must be STANDARD conventional measures for the domain (no contrived metrics); tasks must follow a STRUCTURED curriculum calibrated to the user's pace. Removed all hardcoded domain examples.

@@ -11,6 +11,7 @@ import com.secondbrain.second_brain_server.exception.ForbiddenException;
 import com.secondbrain.second_brain_server.exception.ResourceNotFoundException;
 import com.secondbrain.second_brain_server.repository.DomainRepository;
 import com.secondbrain.second_brain_server.repository.TaskRepository;
+import com.secondbrain.second_brain_server.external.YouTubeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,7 +31,7 @@ public class TaskService {
 
     private final TaskRepository taskRepository;
     private final DomainService domainService;
-    private final com.secondbrain.second_brain_server.external.YouTubeService youTubeService;
+    private final YouTubeService youTubeService;
 
     @Transactional
     public TaskResponse createTask(UUID userId, CreateTaskRequest request) {
@@ -114,17 +115,6 @@ public class TaskService {
             throw new ForbiddenException("User is not authorized to delete this task.");
         }
         taskRepository.delete(task);
-    }
-
-    @Transactional
-    public void markDueTasksDoneForDomain(UUID domainId, LocalDate logDate) {
-        List<Task> pendingTasks = taskRepository.findByDomainIdAndDueDateLessThanEqualAndStatusIn(
-                domainId, logDate, List.of(TaskStatus.TODO, TaskStatus.IN_PROGRESS));
-        pendingTasks.forEach(task -> {
-            task.setStatus(TaskStatus.DONE);
-            task.setCompletedAt(LocalDateTime.now());
-        });
-        taskRepository.saveAll(pendingTasks);
     }
 
     @Transactional

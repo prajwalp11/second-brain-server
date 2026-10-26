@@ -26,6 +26,5 @@ public class SessionLogResponse {
     private String notes;
     private String linkedReferenceUrl;
     private Map<String, Double> metrics;
-    private String aiInsight;
     private List<PersonalRecordResponse> newPrs;
 }

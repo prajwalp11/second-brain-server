@@ -29,6 +29,11 @@ public interface SessionMetricValueRepository extends JpaRepository<SessionMetri
             "AND sl.logDate BETWEEN :from AND :to")
     Optional<Double> sumMetricForPeriod(UUID domainId, String metricKey, LocalDate from, LocalDate to);
 
+    @Query("SELECT AVG(smv.numericValue) FROM SessionMetricValue smv JOIN smv.sessionLog sl " +
+            "WHERE sl.domain.id = :domainId AND smv.metricKey = :metricKey " +
+            "AND sl.logDate BETWEEN :from AND :to")
+    Optional<Double> avgMetricForPeriod(UUID domainId, String metricKey, LocalDate from, LocalDate to);
+
     interface TimeSeriesProjection {
         LocalDate getDate();
         Double getValue();

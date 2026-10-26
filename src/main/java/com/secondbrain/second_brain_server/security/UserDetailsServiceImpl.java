@@ -1,12 +1,11 @@
 package com.secondbrain.second_brain_server.security;
 
+import com.secondbrain.second_brain_server.entities.User;
 import com.secondbrain.second_brain_server.repository.UserRepository;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
-
-import java.util.UUID;
 
 @Service
 public class UserDetailsServiceImpl implements UserDetailsService {
@@ -19,7 +18,8 @@ public class UserDetailsServiceImpl implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        com.secondbrain.second_brain_server.entities.User user = userRepository.findByEmail(email)
+        // Active users only — a soft-deleted row may keep the same email but must never authenticate.
+        User user = userRepository.findByEmailAndIsDeletedFalse(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email / username : " + email));
 
         return new UserPrincipal(user);

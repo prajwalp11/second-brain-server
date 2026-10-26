@@ -13,8 +13,10 @@ import java.util.UUID;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, UUID> {
-    Optional<User> findByEmail(String email);
-    boolean existsByEmail(String email);
+    /** Active-user lookups — email is unique only among non-deleted users (partial index). */
+    Optional<User> findByEmailAndIsDeletedFalse(String email);
+    boolean existsByEmailAndIsDeletedFalse(String email);
+
     @Query("SELECT u.id FROM User u")
     List<UUID> findAllIds();
 

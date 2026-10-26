@@ -11,6 +11,7 @@ import com.secondbrain.second_brain_server.exception.ForbiddenException;
 import com.secondbrain.second_brain_server.exception.ResourceNotFoundException;
 import com.secondbrain.second_brain_server.repository.DomainMetricDefinitionRepository;
 import com.secondbrain.second_brain_server.repository.MilestoneRepository;
+import com.secondbrain.second_brain_server.service.ai.AiSystemGeneratorService;
 import com.secondbrain.second_brain_server.repository.PersonalRecordRepository;
 import com.secondbrain.second_brain_server.repository.SessionMetricValueRepository;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +35,7 @@ public class MilestoneService {
     private final SessionMetricValueRepository sessionMetricValueRepository;
     private final DomainService domainService;
     private final DomainMetricDefinitionRepository metricDefinitionRepository;
-    private final com.secondbrain.second_brain_server.service.ai.AiSystemGeneratorService aiSystemGeneratorService;
+    private final AiSystemGeneratorService aiSystemGeneratorService;
 
     @Transactional
     public MilestoneResponse createMilestone(UUID userId, CreateMilestoneRequest request) {

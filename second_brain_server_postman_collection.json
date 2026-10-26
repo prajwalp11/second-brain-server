@@ -88,6 +88,62 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Request Account Deletion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/request-account-deletion",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "request-account-deletion"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"123456\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/delete-account",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "delete-account"
+              ]
+            }
+          },
+          "response": []
         }
       ]
     },
@@ -1285,13 +1341,49 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/insights",
+              "raw": "{{baseUrl}}/api/insights?domainId={{domainId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "insights"
+              ],
+              "query": [
+                {
+                  "key": "domainId",
+                  "value": "{{domainId}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh AI Insights (manual)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/insights/refresh?domainId={{domainId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "insights",
+                "refresh"
+              ],
+              "query": [
+                {
+                  "key": "domainId",
+                  "value": "{{domainId}}"
+                }
               ]
             }
           },
