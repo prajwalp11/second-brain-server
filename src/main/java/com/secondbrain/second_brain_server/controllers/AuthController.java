@@ -6,6 +6,7 @@ import com.secondbrain.second_brain_server.dto.request.RegisterRequest;
 import com.secondbrain.second_brain_server.dto.request.ResetPasswordRequest;
 import com.secondbrain.second_brain_server.dto.request.VerifyEmailRequest;
 import com.secondbrain.second_brain_server.dto.request.DeleteAccountRequest;
+import com.secondbrain.second_brain_server.dto.request.RefreshTokenRequest;
 import com.secondbrain.second_brain_server.dto.response.AuthResponse;
 import com.secondbrain.second_brain_server.security.CurrentUser;
 import com.secondbrain.second_brain_server.service.AuthService;
@@ -34,6 +35,12 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
+    }
+
+    /** Exchanges a valid refresh token for a new access + refresh token (rotation). Public. */
+    @PostMapping("/refresh")
+    public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
+        return ResponseEntity.ok(authService.refreshAccessToken(request.getRefreshToken()));
     }
 
     @PostMapping("/forgot-password")

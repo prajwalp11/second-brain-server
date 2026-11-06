@@ -6,6 +6,7 @@ import com.secondbrain.second_brain_server.dto.request.UpdateProfileRequest;
 import com.secondbrain.second_brain_server.dto.response.AuthResponse;
 import com.secondbrain.second_brain_server.dto.response.UserResponse;
 import com.secondbrain.second_brain_server.entities.OtpToken;
+import com.secondbrain.second_brain_server.entities.RefreshToken;
 import com.secondbrain.second_brain_server.entities.User;
 import com.secondbrain.second_brain_server.enums.OtpPurpose;
 import com.secondbrain.second_brain_server.exception.EmailNotVerifiedException;
@@ -13,6 +14,7 @@ import com.secondbrain.second_brain_server.exception.ResourceNotFoundException;
 import com.secondbrain.second_brain_server.exception.UnauthorizedException;
 import com.secondbrain.second_brain_server.exception.ValidationException;
 import com.secondbrain.second_brain_server.repository.OtpTokenRepository;
+import com.secondbrain.second_brain_server.repository.RefreshTokenRepository;
 import com.secondbrain.second_brain_server.repository.UserRepository;
 import com.secondbrain.second_brain_server.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +44,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final OtpTokenRepository otpTokenRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
     private final AccountDeletionService accountDeletionService;
     private final EmailService emailService;
 
@@ -81,6 +84,7 @@ public class AuthService {
         return "Registration successful. Please verify your email.";
     }
 
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
@@ -94,6 +98,10 @@ public class AuthService {
             sendVerificationCodeFor(user);
             throw new EmailNotVerifiedException("Email not verified. A new code has been sent.");
         }
+
+        // Single active session: revoke any existing refresh tokens so a new login signs the
+        // user out of all other devices (prevents stale sessions, important once push is enabled).
+        refreshTokenRepository.revokeAllForUser(user.getId());
 
         return buildAuthResponse(user);
     }
@@ -253,6 +261,7 @@ public class AuthService {
 
         // Wipe all user-owned data (dedicated service), then soft-delete the user row.
         accountDeletionService.wipeUserData(user.getId());
+        refreshTokenRepository.revokeAllForUser(user.getId());
 
         // Soft-delete: keep the row + email, block future login, clear the password.
         user.setIsDeleted(true);
@@ -340,13 +349,55 @@ public class AuthService {
 
     @Transactional
     public void logout(UUID userId) {
+        refreshTokenRepository.revokeAllForUser(userId);
         log.info("User {} logged out", userId);
     }
 
+    /**
+     * Exchanges a valid (unexpired, unrevoked) refresh token for a NEW access token and a NEW
+     * refresh token, revoking the presented one (rotation). Throws if the token is unknown,
+     * revoked, or expired — the client must then re-login.
+     */
+    @Transactional
+    public AuthResponse refreshAccessToken(String refreshToken) {
+        RefreshToken stored = refreshTokenRepository.findByTokenHash(hashCode(refreshToken))
+                .orElseThrow(() -> new UnauthorizedException("Invalid refresh token"));
+
+        if (stored.isRevoked() || stored.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new UnauthorizedException("Refresh token expired or revoked");
+        }
+
+        User user = userRepository.findById(stored.getUserId())
+                .filter(u -> !Boolean.TRUE.equals(u.getIsDeleted()))
+                .orElseThrow(() -> new UnauthorizedException("Invalid refresh token"));
+
+        // Rotation: revoke the presented token, issue a fresh pair.
+        stored.setRevoked(true);
+        refreshTokenRepository.save(stored);
+
+        return buildAuthResponse(user);
+    }
+
+    /** Builds an access token + a new rotating refresh token (hashed at rest). */
     private AuthResponse buildAuthResponse(User user) {
         String accessToken = jwtUtil.generateAccessToken(user);
+        String refreshToken = issueRefreshToken(user.getId());
         return AuthResponse.builder()
                 .accessToken(accessToken)
+                .refreshToken(refreshToken)
                 .build();
+    }
+
+    /** Creates and stores (hashed) a new refresh token, returning the raw value for the client. */
+    private String issueRefreshToken(UUID userId) {
+        String raw = jwtUtil.generateRefreshTokenValue();
+        RefreshToken token = RefreshToken.builder()
+                .userId(userId)
+                .tokenHash(hashCode(raw))
+                .expiresAt(LocalDateTime.now().plus(jwtUtil.getRefreshTokenExpiryMs(), ChronoUnit.MILLIS))
+                .revoked(false)
+                .build();
+        refreshTokenRepository.save(token);
+        return raw;
     }
 }

@@ -442,3 +442,22 @@ UPDATE users SET is_deleted = FALSE WHERE is_deleted IS NULL;
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key;
 -- Enforce uniqueness only among non-deleted users.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email_active ON users(email) WHERE is_deleted = FALSE;
+
+
+-- ============================================
+-- REFRESH TOKENS (rotating; keeps users logged in past the 1h access token)
+-- Opaque random token stored as a SHA-256 hash (never the raw value). Each /auth/refresh
+-- issues a new access token + new refresh token and revokes the old (rotation). Revoked on logout.
+-- ============================================
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL,
+    token_hash VARCHAR(255) NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    revoked BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    CONSTRAINT fk_refresh_token_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON refresh_tokens(token_hash);

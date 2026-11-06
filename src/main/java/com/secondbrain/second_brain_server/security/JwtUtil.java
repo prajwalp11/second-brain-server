@@ -21,6 +21,13 @@ public class JwtUtil {
     @Value("${jwt.access-token-expiry-ms}")
     private long accessTokenExpiryMs;
 
+    @Value("${jwt.refresh-token-expiry-ms}")
+    private long refreshTokenExpiryMs;
+
+    public long getRefreshTokenExpiryMs() {
+        return refreshTokenExpiryMs;
+    }
+
     private SecretKey getSigningKey() {
         return Keys.hmacShaKeyFor(secret.getBytes());
     }
