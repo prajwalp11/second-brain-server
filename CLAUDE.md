@@ -459,3 +459,28 @@ No new tables this batch. If fixing a legacy unbounded score metric, run the `UP
 - **Weekly snapshot bug:** `WeeklyStatService.aggregateMetric` now AVERAGES bounded metrics (maxValue != null) over the week and clamps to [min,max]; SUMS open-ended ones. Added `SessionMetricValueRepository.avgMetricForPeriod`. Fixes score metrics (0-100) exceeding cap.
 - **Streak logic:** `StreakCalculator.compute` now counts ANY logged day toward the streak; the weekly schedule only BREAKS it (a past scheduled day with no log). Today never counts as a missed day. Streak remains cached in `domains.current_streak/longest_streak`, recomputed on log / midnight scheduler / manual recalc.
 - **PromptBuilder hardening (domain-agnostic):** metric bounds rule made CRITICAL + annotated in JSON spec (score/rating/% ⇒ min 0/max 100, never null); metrics must be STANDARD conventional measures for the domain (no contrived metrics); tasks must follow a STRUCTURED curriculum calibrated to the user's pace. Removed all hardcoded domain examples.
+
+## Session Log — Refresh Tokens (rotating, single-session)
+
+### Tokens
+- **Access token** shortened to **1 hour** (`jwt.access-token-expiry-ms`, env `JWT_ACCESS_TOKEN_EXPIRY_MS`, default 3600000). **Refresh token 60 days** (`jwt.refresh-token-expiry-ms` / `JWT_REFRESH_TOKEN_EXPIRY_MS`, default 5184000000). Both configurable.
+- **`refresh_tokens` table** + `RefreshToken` entity + `RefreshTokenRepository`. Opaque random value stored SHA-256-hashed (reuses AuthService.hashCode), `revoked` flag, FK cascade, indexed on user_id + token_hash.
+- `AuthResponse` now returns `accessToken` + `refreshToken`.
+
+### Flow (rotation + single session)
+- `login`/`register` (via `buildAuthResponse` → `issueRefreshToken`) return both tokens.
+- **`POST /auth/refresh`** (`RefreshTokenRequest {refreshToken}`, public) → `AuthService.refreshAccessToken`: validates (unrevoked + unexpired + user not soft-deleted), **revokes the presented token, issues a NEW access + NEW refresh** (rotation → active users effectively never expire; 60d is max inactivity).
+- **Single active session:** `login` calls `refreshTokenRepository.revokeAllForUser` first, so a new login signs out other devices (chosen over multi-device because push would misroute to stale sessions). `logout` + `deleteAccount` also revoke all.
+- `login` is now `@Transactional`.
+
+### Cleanup
+- Renamed `PasswordResetTokenCleanupScheduler` → `OtpTokenCleanupScheduler` (done in the OTP-consolidation batch); it now also purges revoked/expired refresh tokens hourly.
+
+### App
+- Stores both tokens in SecureStore; `signIn(access, refresh)`. api.ts 401 interceptor now transparently calls `/auth/refresh` (via a bare axios client, de-duped across concurrent 401s, retries the original request) and only logs out if refresh fails.
+
+### Google SSO status
+- Still **Phase 2, NOT implemented.** Only prep exists: `users.auth_provider`, nullable password, SSO-aware forgot-password. LLD's GoogleTokenVerifier/GoogleUserInfo/GoogleAuthRequest/findByGoogleId/googleAuth are DESIGN-ONLY (annotated as planned). No endpoint, verifier, googleId column, or OAuth dependency in code.
+
+### Deploy SQL
+`CREATE TABLE refresh_tokens (...)` + `idx_refresh_tokens_user` + `idx_refresh_tokens_hash` (idempotent in V1).

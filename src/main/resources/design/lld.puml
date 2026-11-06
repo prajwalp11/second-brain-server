@@ -62,6 +62,27 @@ package "entities" {
     no per-purpose duplication.
   end note
 
+  class RefreshToken {
+    - id : UUID <<PK>>
+    - userId : UUID <<FK>>
+    - tokenHash : String
+    - expiresAt : LocalDateTime
+    - revoked : boolean
+    - createdAt : LocalDateTime
+  }
+  note right of RefreshToken
+    Long-lived rotating refresh token (refresh_tokens).
+    Opaque random value stored SHA-256-hashed (never raw).
+    Expiry = jwt.refresh-token-expiry-ms (default 60 days).
+    Access token = jwt.access-token-expiry-ms (default 1h).
+    Each POST /auth/refresh validates (unrevoked + unexpired),
+    revokes the presented token, and issues a NEW access +
+    NEW refresh token (rotation → active users never expire).
+    SINGLE SESSION: login revokes all prior refresh tokens,
+    so a new login signs out other devices. Logout + account
+    deletion revoke all. Hourly cleanup via OtpTokenCleanupScheduler.
+  end note
+
   class JobExecutionLog {
     - id : UUID <<PK>>
     - jobName : String
@@ -679,10 +700,10 @@ package "dto_response" {
 ' ============================================================
 package "repositories" {
   interface UserRepository {
-    + findByEmail(email: String) : Optional<User>
-    + findByGoogleId(googleId: String) : Optional<User>
-    + existsByEmail(email: String) : boolean
+    + findByEmailAndIsDeletedFalse(email: String) : Optional<User>
+    + existsByEmailAndIsDeletedFalse(email: String) : boolean
     + findAllIds() : List<UUID>
+    + resetAllDailyAiUsage() : void
   }
   interface DomainRepository {
     + findByUserId(userId: UUID) : List<Domain>
@@ -756,6 +777,19 @@ package "repositories" {
     + findTop20ByConversationIdOrderByCreatedAtDesc(conversationId: UUID) : List<AiMessage>
     + countByUserIdAndRoleAndCreatedAtAfter(userId: UUID, role: MessageRole, since: LocalDateTime) : long
   }
+
+  interface OtpTokenRepository {
+    + findFirstByUserIdAndPurposeAndUsedFalseOrderByCreatedAtDesc(userId: UUID, purpose: OtpPurpose) : Optional<OtpToken>
+    + countByUserIdAndPurposeAndCreatedAtAfter(userId: UUID, purpose: OtpPurpose, since: LocalDateTime) : long
+    + invalidateAllForUser(userId: UUID, purpose: OtpPurpose) : void
+    + deleteUsedOrExpired(now: LocalDateTime) : int
+  }
+
+  interface RefreshTokenRepository {
+    + findByTokenHash(tokenHash: String) : Optional<RefreshToken>
+    + revokeAllForUser(userId: UUID) : void
+    + deleteRevokedOrExpired(now: LocalDateTime) : int
+  }
   
   
 }
@@ -767,6 +801,7 @@ package "services" {
   class AuthService {
     - userRepository : UserRepository
     - otpTokenRepository : OtpTokenRepository
+    - refreshTokenRepository : RefreshTokenRepository
     - accountDeletionService : AccountDeletionService
     - emailService : EmailService
     - jwtUtil : JwtUtil
@@ -778,6 +813,7 @@ package "services" {
     --
     + register(request: RegisterRequest) : String
     + login(request: LoginRequest) : AuthResponse
+    + refreshAccessToken(refreshToken: String) : AuthResponse
     + forgotPassword(email: String) : boolean
     + resetPassword(email: String, code: String, newPassword: String) : void
     + verifyEmail(email: String, code: String) : void
@@ -789,6 +825,7 @@ package "services" {
     + updateProfile(userId: UUID, request: UpdateProfileRequest) : UserDto
     - issueOtp(user: User, purpose: OtpPurpose) : String
     - consumeOtp(userId: UUID, purpose: OtpPurpose, code: String) : void
+    - issueRefreshToken(userId: UUID) : String
     - buildAuthResponse(user: User) : AuthResponse
   }
   note left of AuthService
@@ -802,6 +839,10 @@ package "services" {
     deleteAccount() requires OTP + current password, delegates
     data removal to AccountDeletionService, then soft-deletes
     the user row (is_deleted=true, password cleared, email kept).
+    login() + register() return access (1h) + refresh (60d, rotating)
+    via buildAuthResponse/issueRefreshToken. login() revokes all prior
+    refresh tokens (SINGLE active session). refreshAccessToken() rotates
+    (revoke presented, issue new pair). logout()/deleteAccount() revoke all.
   end note
   class AccountDeletionService {
     - domainRepository : DomainRepository
@@ -1234,6 +1275,11 @@ package "external" {
     --
     + verify(token: String) : GoogleUserInfo
   }
+  note right of GoogleTokenVerifier
+    PLANNED (Phase 2 — NOT implemented). No such class,
+    endpoint, googleId column or OAuth dependency exists
+    in code yet. Shown as the intended Google SSO design only.
+  end note
   class GoogleUserInfo {
     + sub : String
     + email : String
@@ -1251,6 +1297,7 @@ package "controllers" {
     --
     + register(request: RegisterRequest) : ResponseEntity<AuthResponse>
     + login(request: LoginRequest) : ResponseEntity<AuthResponse>
+    + refresh(request: RefreshTokenRequest) : ResponseEntity<AuthResponse>
     + forgotPassword(request: ForgotPasswordRequest) : ResponseEntity<Void>
     + resetPassword(request: ResetPasswordRequest) : ResponseEntity<Void>
     + verifyEmail(request: VerifyEmailRequest) : ResponseEntity<Void>
@@ -1260,11 +1307,13 @@ package "controllers" {
     + logout() : ResponseEntity<Void>
   }
   note right of AuthController
-    forgotPassword: always 200 (no email enumeration);
-    if a LOCAL account exists, emails a 6-digit code.
-    resetPassword: validates code (hash/expiry/used),
-    BCrypt-updates password. googleAuth endpoint
-    planned for Phase 2 (Google SSO).
+    All /api/auth/** are public. login/register issue an
+    access token (1h) + rotating refresh token (60d).
+    refresh: exchanges a valid refresh token for a new pair
+    (rotation); single active session (login revokes prior
+    refresh tokens). forgotPassword: always 200 (no email
+    enumeration). Google SSO is still Phase 2 — NOT implemented
+    (no googleAuth endpoint / verifier in code yet).
   end note
   class DomainController {
     - domainService : DomainService
@@ -1401,12 +1450,14 @@ package "security" {
   end note
 
   class JwtUtil {
-    - secretKey : String
-    - accessTokenExpiryMs : Long
+    - secret : String <<@Value jwt.secret>>
+    - accessTokenExpiryMs : long <<@Value jwt.access-token-expiry-ms>>
+    - refreshTokenExpiryMs : long <<@Value jwt.refresh-token-expiry-ms>>
     --
     + generateAccessToken(user: User) : String
     + generateRefreshTokenValue() : String
-    + extractUserId(token: String) : UUID
+    + getRefreshTokenExpiryMs() : long
+    + extractEmail(token: String) : String
     + validateToken(token: String) : boolean
   }
 
@@ -1554,16 +1605,17 @@ package "scheduler" {
     Guard skips domains cleared deliberately
     (no DONE history).
   end note
-  class PasswordResetTokenCleanupScheduler {
-    - passwordResetTokenRepository : PasswordResetTokenRepository
+  class OtpTokenCleanupScheduler {
+    - otpTokenRepository : OtpTokenRepository
+    - refreshTokenRepository : RefreshTokenRepository
     - jobLogService : JobLogService
     --
     + cleanupTokens() : void
   }
-  note right of PasswordResetTokenCleanupScheduler
-    Runs hourly (cron 0 0 * * * ?). Deletes used
-    or expired password_reset_tokens so the table
-    stays bounded. Wrapped in JobLogService.
+  note right of OtpTokenCleanupScheduler
+    Runs hourly (cron 0 0 * * * ?). Deletes used/expired
+    OTP tokens (all purposes) + revoked/expired refresh
+    tokens so those tables stay bounded. Wrapped in JobLogService.
   end note
   note bottom of scheduler
     All schedulers wrapped with
@@ -1677,7 +1729,7 @@ AiConversation "1" --> "many" AiMessage : contains
 AuthService ..> UserRepository : uses
 
 
-AuthService ..> GoogleTokenVerifier : uses
+AuthService ..> GoogleTokenVerifier : uses (PLANNED, not implemented)
 AuthService ..> JwtUtil : uses
 
 UserDetailsServiceImpl ..> UserRepository : uses
