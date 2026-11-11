@@ -7,6 +7,7 @@ import com.secondbrain.second_brain_server.dto.request.ResetPasswordRequest;
 import com.secondbrain.second_brain_server.dto.request.VerifyEmailRequest;
 import com.secondbrain.second_brain_server.dto.request.DeleteAccountRequest;
 import com.secondbrain.second_brain_server.dto.request.RefreshTokenRequest;
+import com.secondbrain.second_brain_server.dto.request.GoogleAuthRequest;
 import com.secondbrain.second_brain_server.dto.response.AuthResponse;
 import com.secondbrain.second_brain_server.security.CurrentUser;
 import com.secondbrain.second_brain_server.service.AuthService;
@@ -41,6 +42,12 @@ public class AuthController {
     @PostMapping("/refresh")
     public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
         return ResponseEntity.ok(authService.refreshAccessToken(request.getRefreshToken()));
+    }
+
+    /** Google SSO: verify a Google ID token, find-or-create/link the user, return our tokens. Public. */
+    @PostMapping("/google")
+    public ResponseEntity<AuthResponse> googleAuth(@Valid @RequestBody GoogleAuthRequest request) {
+        return ResponseEntity.ok(authService.googleLogin(request.getIdToken()));
     }
 
     @PostMapping("/forgot-password")

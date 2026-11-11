@@ -13,6 +13,8 @@ import com.secondbrain.second_brain_server.exception.EmailNotVerifiedException;
 import com.secondbrain.second_brain_server.exception.ResourceNotFoundException;
 import com.secondbrain.second_brain_server.exception.UnauthorizedException;
 import com.secondbrain.second_brain_server.exception.ValidationException;
+import com.secondbrain.second_brain_server.external.GoogleTokenVerifier;
+import com.secondbrain.second_brain_server.external.GoogleUserInfo;
 import com.secondbrain.second_brain_server.repository.OtpTokenRepository;
 import com.secondbrain.second_brain_server.repository.RefreshTokenRepository;
 import com.secondbrain.second_brain_server.repository.UserRepository;
@@ -46,6 +48,7 @@ public class AuthService {
     private final OtpTokenRepository otpTokenRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final AccountDeletionService accountDeletionService;
+    private final GoogleTokenVerifier googleTokenVerifier;
     private final EmailService emailService;
 
     @Value("${auth.otp.expiry-ms:1800000}")
@@ -62,7 +65,14 @@ public class AuthService {
 
     @Transactional
     public String register(RegisterRequest request) {
-        if (userRepository.existsByEmailAndIsDeletedFalse(request.getEmail())) {
+        var existing = userRepository.findByEmailAndIsDeletedFalse(request.getEmail());
+        if (existing.isPresent()) {
+            // If the email belongs to a Google-only account (no password set), guide the user to
+            // Google sign-in instead of a dead-end "already registered" message.
+            if ("GOOGLE".equals(existing.get().getAuthProvider()) && existing.get().getPassword() == null) {
+                throw new ValidationException(
+                        "This email is registered with Google. Use \"Continue with Google\" to sign in.");
+            }
             throw new ValidationException("Email already registered.");
         }
 
@@ -104,6 +114,66 @@ public class AuthService {
         refreshTokenRepository.revokeAllForUser(user.getId());
 
         return buildAuthResponse(user);
+    }
+
+    /**
+     * Google SSO. Verifies the Google ID token, then resolves the user:
+     *   1. by google_id (returning Google user), else
+     *   2. link to an existing active account with the same email (only if Google verified it), else
+     *   3. create a new account (auth_provider=GOOGLE, no password, email pre-verified).
+     * Then revokes prior sessions (single active session) and returns our access + refresh tokens.
+     */
+    @Transactional
+    public AuthResponse googleLogin(String idToken) {
+        GoogleUserInfo info = googleTokenVerifier.verify(idToken);
+
+        User user = userRepository.findByGoogleIdAndIsDeletedFalse(info.getSub())
+                .orElseGet(() -> resolveOrCreateGoogleUser(info));
+
+        refreshTokenRepository.revokeAllForUser(user.getId());
+        return buildAuthResponse(user);
+    }
+
+    /** Links Google to an existing email account (same, verified email) or creates a new one. */
+    private User resolveOrCreateGoogleUser(GoogleUserInfo info) {
+        if (info.getEmail() != null && info.isEmailVerified()) {
+            var existing = userRepository.findByEmailAndIsDeletedFalse(info.getEmail());
+            if (existing.isPresent()) {
+                // Link: attach google_id to the existing account; keep their auth_provider/password.
+                User user = existing.get();
+                user.setGoogleId(info.getSub());
+                user.setEmailVerified(true);
+                user.setUpdatedAt(LocalDateTime.now());
+                return userRepository.save(user);
+            }
+        }
+
+        // Create a fresh Google-only account.
+        String[] names = splitName(info.getName());
+        User newUser = User.builder()
+                .email(info.getEmail())
+                .firstName(names[0])
+                .lastName(names[1])
+                .googleId(info.getSub())
+                .authProvider("GOOGLE")
+                .emailVerified(true)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+        return userRepository.save(newUser);
+    }
+
+    /** Splits a Google display name into [first, last]; tolerates null/single names. */
+    private String[] splitName(String name) {
+        if (name == null || name.isBlank()) {
+            return new String[]{"", ""};
+        }
+        String trimmed = name.trim();
+        int space = trimmed.indexOf(' ');
+        if (space < 0) {
+            return new String[]{trimmed, ""};
+        }
+        return new String[]{trimmed.substring(0, space), trimmed.substring(space + 1).trim()};
     }
 
     public UserResponse getProfile(UUID userId) {

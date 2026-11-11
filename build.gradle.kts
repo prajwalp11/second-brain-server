@@ -46,6 +46,8 @@ dependencies {
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     implementation ("com.fasterxml.jackson.core:jackson-databind")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
+    // Google Sign-In: verifies Google ID tokens against Google's public certs (auto-refreshed).
+    implementation("com.google.api-client:google-api-client:2.7.0")
 }
 
 tasks.withType<Test> {

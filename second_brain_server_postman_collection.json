@@ -13,6 +13,7 @@
           "name": "Register",
           "request": {
             "method": "POST",
+            "description": "Create an EMAIL/password account (unverified) and email a 6-digit OTP. 400 'Email already registered.' if the email exists as an EMAIL account; 400 'This email is registered with Google. Use \"Continue with Google\" to sign in.' if it exists as a Google-only account (auth_provider=GOOGLE, no password).",
             "header": [
               {
                 "key": "Content-Type",
@@ -88,6 +89,35 @@
                 "api",
                 "auth",
                 "refresh"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Google Sign-In",
+          "request": {
+            "method": "POST",
+            "description": "Verify a Google ID token and return the same access + refresh tokens as email auth. The app obtains idToken via the native @react-native-google-signin SDK; its audience is the WEB OAuth client, which must be listed in the server's GOOGLE_SSO_CLIENT_ID. Resolves user by google_id, else links to an existing same-email (verified) account, else creates a new auth_provider=GOOGLE account.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idToken\": \"<google-id-token>\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/google",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "google"
               ]
             }
           },

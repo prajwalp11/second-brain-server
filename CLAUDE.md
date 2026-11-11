@@ -484,3 +484,63 @@ No new tables this batch. If fixing a legacy unbounded score metric, run the `UP
 
 ### Deploy SQL
 `CREATE TABLE refresh_tokens (...)` + `idx_refresh_tokens_user` + `idx_refresh_tokens_hash` (idempotent in V1).
+
+## Session Log — Google SSO (ID-token verification)
+
+### Flow
+- App performs Google Sign-In (expo-auth-session Google provider, native iOS/Android clients) → gets a Google **ID token** → `POST /auth/google {idToken}`.
+- `GoogleTokenVerifier.verify(idToken)` validates it against Google's public certs (google-api-client `GoogleIdTokenVerifier`; keys auto-fetched + cached, never stale; FREE). Checks signature/expiry/**audience** against `google.sso.client-id` (comma-separated accepted client IDs).
+- `AuthService.googleLogin`: find by `google_id` → else **link** to an existing active account with the same email (only if Google `email_verified`) → else **create** new (`auth_provider=GOOGLE`, `password=null`, `email_verified=true`). Then single-session revoke + `buildAuthResponse` → returns the SAME access+refresh tokens as email auth.
+
+### Pieces
+- Dependency: `com.google.api-client:google-api-client:2.7.0`.
+- Config: `google.sso.client-id=${GOOGLE_SSO_CLIENT_ID:}` (comma-separated audiences — list each platform's OAuth client ID).
+- Schema: `users.google_id VARCHAR(255)` + partial unique index `uq_users_google_id_active` (active, non-null).
+- `User.googleId`; `GoogleUserInfo`, `GoogleTokenVerifier` (external pkg); `GoogleAuthRequest {idToken}`; `UserRepository.findByGoogleIdAndIsDeletedFalse`; `POST /auth/google` (public).
+
+### Client IDs (audiences)
+- The **Web** OAuth client was created then **revoked** — not used. Native sign-ins issue id_tokens whose `aud` is the **iOS/Android client id**, so the backend lists those as accepted audiences. Bundle id/package = `com.secondbrain.app` (changed from the `com.anonymous.*` default). **[SUPERSEDED — see "Google SSO client switched to native SDK (CURRENT)" below: the Web client was recreated; the native SDK's id_token `aud` is the WEB client, which must be in `GOOGLE_SSO_CLIENT_ID`.]**
+- CAVEAT: native-only (no web client) id_token issuance can be finicky in expo-auth-session; if the app reports "No ID token returned", create a new Web client and pass it as webClientId to force id_token issuance.
+
+### Deploy SQL
+`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255);` + `CREATE UNIQUE INDEX IF NOT EXISTS uq_users_google_id_active ON users(google_id) WHERE is_deleted = FALSE AND google_id IS NOT NULL;`
+
+### Env
+`GOOGLE_SSO_CLIENT_ID=<ios-client-id>,<android-client-id>` (accepted audiences).
+
+
+## Session Log — Google SSO client switched to native SDK + register-collision message (CURRENT)
+
+**Backend is unchanged in mechanism** — `GoogleTokenVerifier.verify(idToken)` + `AuthService.googleLogin`
+still work exactly as described above (verify id_token → find by `google_id` → link existing same-email
+account if `email_verified` → else create `auth_provider=GOOGLE`, `password=null`, `email_verified=true`).
+
+What changed:
+- **Client-side flow:** the app moved off `expo-auth-session` (browser/redirect flow, which failed on
+  standalone Android) to the **native** `@react-native-google-signin/google-signin` SDK. No browser, no
+  redirect URI.
+- **Audience is now the WEB client:** the native SDK is configured with a **Web** client id as
+  `webClientId`, so the id_token's `aud` is the **Web** client. Therefore `GOOGLE_SSO_CLIENT_ID` **must
+  include the Web client id** (the Android client authorizes the sign-in via package + SHA-1 but is not the
+  token audience). The previously-revoked Web client was **recreated** for this. Recommended value:
+  `GOOGLE_SSO_CLIENT_ID=<web-client-id>,<ios-client-id>,<android-client-id>` (order irrelevant; extras harmless).
+- **`register()` message improvement:** when the email already belongs to a Google-only account
+  (`auth_provider=GOOGLE` AND `password == null`), `register()` now throws
+  *"This email is registered with Google. Use \"Continue with Google\" to sign in."* instead of the generic
+  "Email already registered." (Plain message still used for existing EMAIL/password accounts.)
+
+### Merge edge cases (verified against code)
+- Create email/password account → later sign in with Google (same verified email): Google **links**
+  `google_id` to the existing row and **keeps `auth_provider=EMAIL` + the password**. Result: one account,
+  both methods work.
+  - Login with old password afterwards → **works** (password untouched).
+  - Register again with that email → **"Email already registered"** (it's an EMAIL+password account).
+- Google-first account (`auth_provider=GOOGLE`, `password=null`) → register with that email → new
+  **"registered with Google"** message; password login would fail (no password) and correctly guides to Google.
+- Rare: Google returns `email_verified=false` for an email that already exists → falls through to create a
+  second row → hits the partial unique email index → 500 (no data corruption; ugly message). Not hardened.
+
+### Auth rate limiting (context)
+`AuthRateLimitFilter`: **10 POSTs per IP per 15-minute** window to `/api/auth/*` → 429
+*"Too many attempts. Please try again in 15 minutes."* In-memory; cleared by a service restart. Rapid
+login/logout testing can trip it. Left as-is intentionally.

@@ -17,6 +17,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByEmailAndIsDeletedFalse(String email);
     boolean existsByEmailAndIsDeletedFalse(String email);
 
+    /** Google SSO: find an active user by their linked Google id. */
+    Optional<User> findByGoogleIdAndIsDeletedFalse(String googleId);
+
     @Query("SELECT u.id FROM User u")
     List<UUID> findAllIds();
 

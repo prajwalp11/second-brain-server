@@ -16,6 +16,7 @@ CREATE TABLE users (
                        auth_provider VARCHAR(20) DEFAULT 'EMAIL',
                        email_verified BOOLEAN DEFAULT FALSE,
                        is_deleted BOOLEAN DEFAULT FALSE,
+                       google_id VARCHAR(255),
                        ai_daily_limit INT DEFAULT 3,
                        ai_used_today INT DEFAULT 0,
                        created_at TIMESTAMP DEFAULT NOW(),
@@ -461,3 +462,12 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON refresh_tokens(token_hash);
+
+
+-- ============================================
+-- GOOGLE SSO: link Google accounts to users
+-- google_id = Google's stable user id (the ID token's "sub"). Nullable (email users have none).
+-- Unique among active users only (consistent with email).
+-- ============================================
+ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_users_google_id_active ON users(google_id) WHERE is_deleted = FALSE AND google_id IS NOT NULL;

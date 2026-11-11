@@ -26,6 +26,7 @@ package "entities" {
     - authProvider : String <<EMAIL|GOOGLE|APPLE>>
     - emailVerified : Boolean
     - isDeleted : Boolean <<soft-delete: data wiped, login blocked, row+email kept>>
+    - googleId : String <<nullable; unique among active users (Google SSO link)>>
     
     - profilePictureUrl : String
     - timezone : String
@@ -420,7 +421,7 @@ package "dto_request" {
     + password : String <<NotBlank>>
   }
   class GoogleAuthRequest {
-    + googleToken : String <<NotBlank>>
+    + idToken : String <<NotBlank>>
   }
   class RefreshTokenRequest {
     + refreshToken : String <<NotBlank>>
@@ -702,6 +703,7 @@ package "repositories" {
   interface UserRepository {
     + findByEmailAndIsDeletedFalse(email: String) : Optional<User>
     + existsByEmailAndIsDeletedFalse(email: String) : boolean
+    + findByGoogleIdAndIsDeletedFalse(googleId: String) : Optional<User>
     + findAllIds() : List<UUID>
     + resetAllDailyAiUsage() : void
   }
@@ -814,6 +816,7 @@ package "services" {
     + register(request: RegisterRequest) : String
     + login(request: LoginRequest) : AuthResponse
     + refreshAccessToken(refreshToken: String) : AuthResponse
+    + googleLogin(idToken: String) : AuthResponse
     + forgotPassword(email: String) : boolean
     + resetPassword(email: String, code: String, newPassword: String) : void
     + verifyEmail(email: String, code: String) : void
@@ -830,6 +833,10 @@ package "services" {
   }
   note left of AuthService
     register() creates an unverified account + emails an OTP.
+    If the email already belongs to a Google-only account
+    (auth_provider=GOOGLE, password=null) it throws a distinct
+    ValidationException guiding the user to "Continue with Google";
+    otherwise "Email already registered."
     login() throws EmailNotVerifiedException (HTTP 403,
     "EMAIL_NOT_VERIFIED") if email_verified=false (re-sends a
     code), and rejects soft-deleted accounts (is_deleted=true).
@@ -843,6 +850,11 @@ package "services" {
     via buildAuthResponse/issueRefreshToken. login() revokes all prior
     refresh tokens (SINGLE active session). refreshAccessToken() rotates
     (revoke presented, issue new pair). logout()/deleteAccount() revoke all.
+    googleLogin(): GoogleTokenVerifier.verify(idToken)
+    → find by google_id, else link to existing email account (only if
+    Google email_verified), else create new (auth_provider=GOOGLE,
+    password=null, email_verified=true) → single-session revoke →
+    buildAuthResponse. Returns the SAME access+refresh tokens as email auth.
   end note
   class AccountDeletionService {
     - domainRepository : DomainRepository
@@ -1271,20 +1283,27 @@ package "external" {
     - getDeviceTokens(userId: UUID) : List<String>
   }
   class GoogleTokenVerifier {
-    - clientId : String
+    - clientIds : String <<@Value google.sso.client-id — comma-separated accepted audiences>>
+    - verifier : GoogleIdTokenVerifier
     --
-    + verify(token: String) : GoogleUserInfo
+    + verify(idToken: String) : GoogleUserInfo
   }
   note right of GoogleTokenVerifier
-    PLANNED (Phase 2 — NOT implemented). No such class,
-    endpoint, googleId column or OAuth dependency exists
-    in code yet. Shown as the intended Google SSO design only.
+    Verifies a Google ID token against Google's public certs via
+    google-api-client's GoogleIdTokenVerifier (FREE, no billable API;
+    keys auto-fetched + cached, never stale). Validates signature +
+    expiry + audience against the configured client IDs. The app uses
+    the native @react-native-google-signin SDK with a WEB client as
+    webClientId, so the id_token's aud is the WEB client — list it in
+    google.sso.client-id (Android client authorizes via package+SHA-1
+    but is not the token audience; include iOS too if shipped). Extracts
+    sub/email/name/email_verified. Throws UnauthorizedException if invalid.
   end note
   class GoogleUserInfo {
     + sub : String
     + email : String
     + name : String
-    + picture : String
+    + emailVerified : boolean
   }
 }
 
@@ -1298,6 +1317,7 @@ package "controllers" {
     + register(request: RegisterRequest) : ResponseEntity<AuthResponse>
     + login(request: LoginRequest) : ResponseEntity<AuthResponse>
     + refresh(request: RefreshTokenRequest) : ResponseEntity<AuthResponse>
+    + googleAuth(request: GoogleAuthRequest) : ResponseEntity<AuthResponse>
     + forgotPassword(request: ForgotPasswordRequest) : ResponseEntity<Void>
     + resetPassword(request: ResetPasswordRequest) : ResponseEntity<Void>
     + verifyEmail(request: VerifyEmailRequest) : ResponseEntity<Void>
@@ -1312,8 +1332,8 @@ package "controllers" {
     refresh: exchanges a valid refresh token for a new pair
     (rotation); single active session (login revokes prior
     refresh tokens). forgotPassword: always 200 (no email
-    enumeration). Google SSO is still Phase 2 — NOT implemented
-    (no googleAuth endpoint / verifier in code yet).
+    enumeration). googleAuth: verifies a Google ID token and
+    find-or-creates/links the user, returning the same tokens.
   end note
   class DomainController {
     - domainService : DomainService
@@ -1729,7 +1749,7 @@ AiConversation "1" --> "many" AiMessage : contains
 AuthService ..> UserRepository : uses
 
 
-AuthService ..> GoogleTokenVerifier : uses (PLANNED, not implemented)
+AuthService ..> GoogleTokenVerifier : uses
 AuthService ..> JwtUtil : uses
 
 UserDetailsServiceImpl ..> UserRepository : uses

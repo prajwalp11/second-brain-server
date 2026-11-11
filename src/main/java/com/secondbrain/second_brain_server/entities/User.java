@@ -42,6 +42,9 @@ public class User {
     @Column(name = "is_deleted")
     private Boolean isDeleted;
 
+    @Column(name = "google_id")
+    private String googleId;
+
     @Column(name = "ai_daily_limit")
     private Integer aiDailyLimit;
 
