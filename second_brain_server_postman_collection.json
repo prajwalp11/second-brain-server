@@ -350,6 +350,7 @@
           "name": "Create Domain",
           "request": {
             "method": "POST",
+            "description": "Create a domain; the AI generates the plan, metrics, milestones and schedule. weeklySchedule (comma-separated 3-letter days, e.g. \"Mon,Wed,Fri\") is the user's chosen training days and is a FIXED constraint the AI plans around (omit/blank to let the AI pick). Metric bounds are resolved server-side by MetricBounds from the AI's scale hint/inference.",
             "header": [
               {
                 "key": "Content-Type",
@@ -362,7 +363,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"domainType\": \"CHESS\",\n  \"customName\": \"My Chess Journey\",\n  \"skillLevel\": \"BEGINNER\",\n  \"linkedResourceUrl\": \"https://chess.com\"\n}"
+              "raw": "{\n  \"domainType\": \"CHESS\",\n  \"customName\": \"My Chess Journey\",\n  \"skillLevel\": \"BEGINNER\",\n  \"weeklySchedule\": \"Mon,Wed,Fri\",\n  \"linkedResourceUrl\": \"https://chess.com\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/domains",

@@ -153,6 +153,12 @@ package "entities" {
       practice_min   / min / isPR=false
       songs_completed/ num / isPR=false
     Zero domain-specific tables.
+
+    BOUNDS: minValue/maxValue are resolved deterministically by util.MetricBounds from the AI's
+    `scale` hint (BOUNDED_100 -> [0,100], OPEN_ENDED -> [0,null]), then explicit maxValue
+    (sanity-guarded), then inference (score/rating/quality/accuracy/execution/percent/"/100"),
+    else open-ended. A non-null maxValue => WeeklyStatService averages+clamps (bounded score);
+    null => it sums (open-ended cumulative). This fixes "0-100 score stored as unbounded".
   end note
 
   class SessionLog {
@@ -431,6 +437,7 @@ package "dto_request" {
     + customName : String
     + context : String
     + skillLevel : SkillLevel <<NotNull>>
+    + weeklySchedule : String <<user-chosen training days "Mon,Wed,Fri"; fixed constraint for AI>>
     + linkedResourceUrl : String
   }
   class UpdateDomainRequest {
@@ -552,6 +559,9 @@ package "dto_response" {
     + isTrackedPerSession : boolean
     + isPR : boolean
     + isHigherBetter : boolean
+    + scale : String <<AI hint: BOUNDED_100 | OPEN_ENDED; resolved by MetricBounds>>
+    + minValue : Double
+    + maxValue : Double
     + displayOrder : Integer
   }
   class SessionLogDto {

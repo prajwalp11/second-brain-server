@@ -544,3 +544,50 @@ What changed:
 `AuthRateLimitFilter`: **10 POSTs per IP per 15-minute** window to `/api/auth/*` → 429
 *"Too many attempts. Please try again in 15 minutes."* In-memory; cleared by a service restart. Rapid
 login/logout testing can trip it. Left as-is intentionally.
+
+
+## Session Log — User-defined schedule + robust metric bounds (scale) + prompt extraction (CURRENT)
+
+### 1. User-defined weekly schedule (was AI-invented)
+Problem: the AI chose the weekly cadence, so if the user later changed it the plan/milestones drifted
+out of sync. Fix: the schedule is now a **user input on the setup/add-domain screens**, passed as a
+**fixed constraint** the AI plans around (it must echo the exact days, never change them). Later changes
+go through AI chat only.
+- `CreateDomainRequest.weeklySchedule` (comma-separated 3-letter days, e.g. "Mon,Wed,Fri"); optional —
+  blank means the AI picks as before.
+- `DomainService.createDomain`: persists the user's schedule on the Domain BEFORE generation and passes
+  it to `generateSystem(..., userSchedule)`. `applyGeneratedSystem` only applies the AI's schedule when
+  the domain has none (user choice wins).
+- `AiSystemGeneratorService.generateSystem/regenerateSystem/createFallbackSystem` thread `userSchedule`
+  through; `regenerateSystem` uses `domain.getWeeklySchedule()`.
+- `PromptBuilder.systemGenerator(..., userSchedule)`: when present, appends a "FIXED USER SCHEDULE
+  (MANDATORY)" block — AI must set weeklySchedule to exactly those days and pace milestones/tasks to it.
+- No DB change — `domains.weekly_schedule` already existed.
+
+### 2. Robust metric bounds — `scale` enum + deterministic `MetricBounds` (ends the "0-100 score stored unbounded" bug)
+Root cause: the only server guard keyed on `unit == "%"`, so AI metrics like "Technical Execution Score"
+/ "Conditioning Performance Rating" (unit `score`/blank, "/100" only in the label, maxValue null) were
+stored OPEN_ENDED → weekly totals exceeded 100. Prompt-only fixes were unreliable. Now the SERVER is the
+source of truth, two layers:
+- **Contract:** `MetricDefinitionResponse.scale` ("BOUNDED_100" | "OPEN_ENDED"); the system-generator
+  schema/guidelines now ask the AI to set `scale` (an enum is far easier for the LLM than numeric bounds).
+- **`util/MetricBounds`** (new, deterministic, testable): resolves (min,max) in order —
+  AI `scale` (BOUNDED_100→[0,100], OPEN_ENDED→[0,null]) → explicit `maxValue` (sanity-guarded: a
+  score-like metric with an absurd max is normalized to 100) → **inference** from unit/label/key
+  (score, rating, quality, accuracy, execution, proficiency, mastery, consistency, percent, /100, 0-100)
+  → else open-ended. Deliberately conservative: excludes bare "rate"/"level"/"index" so open-ended
+  metrics like heart rate/pace stay unbounded.
+- `DomainService.resolveMinValue/resolveMaxValue` delegate to `MetricBounds`. Because
+  `WeeklyStatService` (avg+clamp when maxValue!=null, else sum) and `MetricValidator` read the stored
+  `maxValue`, fixing it at creation fixes aggregation everywhere.
+
+### 3. Prompt text extracted to `PromptTemplates`
+The large STATIC blocks moved out of `PromptBuilder` into `service/ai/PromptTemplates.java` as text-block
+constants: `SYSTEM_GENERATOR_SCHEMA`, `SYSTEM_GENERATOR_GUIDELINES`, `TASK_GENERATION_INSTRUCTIONS`,
+`TASK_GENERATION_OUTPUT`. `PromptBuilder` keeps the dynamic data-weaving and references the constants.
+Text preserved verbatim except the intentional `scale` schema/guideline update. (Only the big static
+sections were extracted; the other prompts interleave runtime data and stay inline by design.)
+
+### Deploy
+Rebuild the jar (Gradle, Java 21). No migration. Verify: re-create a UFC/MMA domain — score/rating
+metrics come back capped at 100; mat time / sparring rounds stay open-ended.

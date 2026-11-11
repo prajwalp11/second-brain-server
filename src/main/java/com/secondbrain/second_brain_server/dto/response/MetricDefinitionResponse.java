@@ -31,5 +31,12 @@ public class MetricDefinitionResponse {
     private Double minValue;
     private Double maxValue;
 
+    /**
+     * AI-provided scale hint: "BOUNDED_100" (a 0-100 score/rating/percentage) or "OPEN_ENDED"
+     * (a cumulative quantity like minutes, reps, distance). Used by MetricBounds to resolve
+     * min/max deterministically; a missing/unknown value falls back to server-side inference.
+     */
+    private String scale;
+
     private Integer displayOrder;
 }

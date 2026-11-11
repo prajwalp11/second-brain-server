@@ -31,7 +31,7 @@ public class PromptBuilder {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final DecimalFormat DECIMAL_FORMAT = new DecimalFormat("#.##");
 
-    public String systemGenerator(DomainType type, SkillLevel level, String url, String customName, String context, List<String> existingSchedules) {
+    public String systemGenerator(DomainType type, SkillLevel level, String url, String customName, String context, List<String> existingSchedules, String userSchedule) {
         LocalDate today = LocalDate.now();
         String dayOfWeek = today.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
 
@@ -39,48 +39,8 @@ public class PromptBuilder {
         prompt.append("You are an expert system designer for a personal growth and habit tracking application called 'Second Brain'.\n");
         prompt.append("Today's date is: ").append(today.format(DATE_FORMATTER)).append(" (").append(dayOfWeek).append(")\n");
         prompt.append("Your task is to generate a comprehensive system for a user's new domain based on their input.\n");
-        prompt.append("The output MUST be a valid JSON object with the following structure:\n");
-        prompt.append("{\n");
-        prompt.append("  \"planDescription\": \"string\",\n");
-        prompt.append("  \"weeklySchedule\": \"string (MUST be comma-separated 3-letter days ONLY, e.g. Mon,Wed,Fri — no spaces after commas, no full day names)\",\n");
-        prompt.append("  \"metrics\": [\n");
-        prompt.append("    {\n");
-        prompt.append("      \"metricKey\": \"string\",\n");
-        prompt.append("      \"label\": \"string\",\n");
-        prompt.append("      \"unit\": \"string\",\n");
-        prompt.append("      \"isTrackedPerSession\": boolean,\n");
-        prompt.append("      \"isPR\": boolean,\n");
-        prompt.append("      \"isHigherBetter\": boolean,\n");
-        prompt.append("      \"minValue\": number or null,   // ALWAYS 0 for scores, percentages, counts, and most metrics\n");
-        prompt.append("      \"maxValue\": number or null,   // REQUIRED 100 for any 0-100 score/rating/percentage metric; null ONLY for truly open-ended, additive quantities\n");
-        prompt.append("      \"displayOrder\": integer\n");
-        prompt.append("    }\n");
-        prompt.append("  ],\n");
-        prompt.append("  \"milestones\": [\n");
-        prompt.append("    {\n");
-        prompt.append("      \"label\": \"string\",\n");
-        prompt.append("      \"metricKey\": \"string\",\n");
-        prompt.append("      \"targetValue\": double,\n");
-        prompt.append("      \"unit\": \"string\",\n");
-        prompt.append("      \"deadline\": \"YYYY-MM-DD\"\n");
-        prompt.append("    }\n");
-        prompt.append("  ],\n");
-        prompt.append("  \"tasks\": [\n");
-        prompt.append("    {\n");
-        prompt.append("      \"title\": \"string\",\n");
-        prompt.append("      \"description\": \"string\",\n");
-        prompt.append("      \"dueDate\": \"YYYY-MM-DD\"\n");
-        prompt.append("    }\n");
-        prompt.append("  ]\n");
-        prompt.append("}\n\n");
-        prompt.append("IMPORTANT GUIDELINES:\n");
-        prompt.append("- planDescription MUST be SHORT: 1-2 sentences max, summarizing cadence and focus for THIS domain (e.g. frequency per week + the main emphasis). Do NOT write paragraphs.\n");
-        prompt.append("- weeklySchedule: Use short 3-letter day names like 'Mon,Wed,Fri' NOT full day names.\n");
-        prompt.append("- All deadlines and due dates MUST be in the future relative to today's date.\n");
-        prompt.append("- For metrics, provide 3-5 metrics that are the STANDARD, conventional measures a serious practitioner, coach, or teacher in this specific domain would genuinely track to gauge progress. Use metrics that are widely recognized for this activity — NEVER invent contrived, gimmicky, or oddly-specific metrics just to have a number. If unsure, prefer the obvious, commonly-used metric over a clever one.\n");
-        prompt.append("- Metric bounds (CRITICAL — follow exactly): every metric that represents a score, rating, quality, or percentage (anything conceptually on a fixed 0-100 or 0-10 scale) MUST have minValue: 0 and maxValue: 100 (use 100 even for a 0-10 scale — the app normalizes). NEVER leave maxValue null for a score/rating/percentage metric, or its weekly total will wrongly exceed the cap. Only truly open-ended, additive quantities (where a weekly total meaningfully grows and has no natural ceiling) get minValue: 0 and maxValue: null.\n");
-        prompt.append("- For milestones, provide 2-3 achievable milestones with realistic deadlines.\n");
-        prompt.append("- For tasks, provide 2-3 initial tasks with due dates in the next 1-2 weeks.\n\n");
+        prompt.append(PromptTemplates.SYSTEM_GENERATOR_SCHEMA);
+        prompt.append(PromptTemplates.SYSTEM_GENERATOR_GUIDELINES);
         prompt.append("User Input:\n");
         prompt.append("Domain Type: ").append(type).append("\n");
         prompt.append("Skill Level: ").append(level).append("\n");
@@ -98,6 +58,12 @@ public class PromptBuilder {
             for (String schedule : existingSchedules) {
                 prompt.append("  - ").append(schedule).append("\n");
             }
+        }
+        if (userSchedule != null && !userSchedule.isBlank()) {
+            prompt.append("\nFIXED USER SCHEDULE (MANDATORY): The user will train on EXACTLY these days: ")
+                  .append(userSchedule).append(".\n");
+            prompt.append("- You MUST set \"weeklySchedule\" to exactly these days (same 3-letter names, same set) — do NOT add, remove, or change any day.\n");
+            prompt.append("- Build planDescription, milestone deadlines, and task pacing AROUND this exact weekly cadence (").append(userSchedule).append("). Do NOT assume a different number of sessions per week.\n");
         }
         prompt.append("Generate the system now.\n");
         return prompt.toString();
@@ -344,24 +310,8 @@ public class PromptBuilder {
             prompt.append("\n");
         }
 
-        prompt.append("INSTRUCTIONS:\n");
-        prompt.append("- Tasks MUST follow a structured curriculum, like a well-designed syllabus for this domain: each task is the next logical step that builds on the fundamentals the user has already covered, in the order a good teacher would sequence them. Do NOT invent random, disconnected activities.\n");
-        prompt.append("- Calibrate the step size to the user's demonstrated pace and skill level: if recent progress is strong/fast, advance to a more challenging next step; if progress is slow or they are struggling, reinforce or consolidate the current level before advancing. The same domain should produce different next steps for a fast learner vs. a struggling beginner.\n");
-        prompt.append("- Tasks should align with their weekly schedule days.\n");
-        prompt.append("- Due dates MUST be within the next 7 days, starting from tomorrow.\n");
-        prompt.append("- Each task should be specific and actionable, with concrete targets drawn from this domain's own metrics and skill level — not vague (prefer a measurable, named action over 'do some practice').\n");
-        prompt.append("- If the user has been feeling tired/rough, suggest lighter recovery sessions.\n");
-        prompt.append("- If streak is 0 or low, prioritize getting them back on track with achievable tasks.\n\n");
-
-        prompt.append("Output MUST be a valid JSON array:\n");
-        prompt.append("[\n");
-        prompt.append("  {\n");
-        prompt.append("    \"title\": \"string (concise, max 60 chars)\",\n");
-        prompt.append("    \"description\": \"string (1-2 sentences with specifics)\",\n");
-        prompt.append("    \"dueDate\": \"YYYY-MM-DD\",\n");
-        prompt.append("    \"videoTopic\": \"string: a short, generic YouTube search phrase (3-6 words) for a tutorial that teaches the SKILL or concept behind this task — NOT the literal task text. Strip any personal numbers/targets and describe the underlying technique a learner would search for.\"\n");
-        prompt.append("  }\n");
-        prompt.append("]\n");
+        prompt.append(PromptTemplates.TASK_GENERATION_INSTRUCTIONS);
+        prompt.append(PromptTemplates.TASK_GENERATION_OUTPUT);
 
         return prompt.toString();
     }

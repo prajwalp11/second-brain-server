@@ -29,6 +29,7 @@ import com.secondbrain.second_brain_server.repository.TaskRepository;
 import com.secondbrain.second_brain_server.service.ai.AiSystemGeneratorService;
 import com.secondbrain.second_brain_server.external.YouTubeService;
 import com.secondbrain.second_brain_server.util.MetricValidator;
+import com.secondbrain.second_brain_server.util.MetricBounds;
 import com.secondbrain.second_brain_server.util.StreakCalculator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -87,12 +88,18 @@ public class DomainService {
             }
         }
 
+        // Normalize the user-chosen schedule (fixed constraint for the AI). Blank -> null (AI decides).
+        String userSchedule = (request.getWeeklySchedule() != null && !request.getWeeklySchedule().isBlank())
+                ? request.getWeeklySchedule().trim()
+                : null;
+
         Domain newDomain = Domain.builder()
                 .user(new User(userId))
                 .domainType(request.getDomainType())
                 .customName(request.getCustomName())
                 .context(request.getContext())
                 .skillLevel(request.getSkillLevel())
+                .weeklySchedule(userSchedule)
                 .status(DomainStatus.ACTIVE)
                 .currentStreak(0)
                 .longestStreak(0)
@@ -102,14 +109,16 @@ public class DomainService {
 
         Domain savedDomain = domainRepository.save(newDomain);
 
-        // Gather existing domain schedules so AI can avoid conflicts
+        // Gather existing domain schedules so AI can avoid conflicts (only relevant when the user
+        // let the AI pick; when the user set their own days we honor those regardless).
         List<String> existingSchedules = domainRepository.findByUserId(userId).stream()
                 .filter(d -> d.getWeeklySchedule() != null && !d.getId().equals(savedDomain.getId()))
                 .map(d -> (d.getCustomName() != null ? d.getCustomName() : d.getDomainType().name()) + ": " + d.getWeeklySchedule())
                 .collect(Collectors.toList());
 
         GeneratedSystemResponse generatedSystem = aiSystemGeneratorService.generateSystem(
-                request.getDomainType(), request.getSkillLevel(), null, request.getCustomName(), request.getContext(), existingSchedules);
+                request.getDomainType(), request.getSkillLevel(), null, request.getCustomName(),
+                request.getContext(), existingSchedules, userSchedule);
         applyGeneratedSystem(savedDomain, generatedSystem);
 
         return savedDomain.toResponse();
@@ -230,29 +239,26 @@ public class DomainService {
         return MetricValidator.clampValues(metrics, definedMetrics);
     }
 
-    /** Persisted min for an AI-generated metric: use AI value if given, else default floor of 0. */
+    /** Persisted min for an AI-generated metric — delegated to the deterministic MetricBounds. */
     private Double resolveMinValue(MetricDefinitionResponse dto) {
-        return dto.getMinValue() != null ? dto.getMinValue() : 0.0;
+        return MetricBounds.resolveMin(dto);
     }
 
-    /** Persisted max: use AI value if given, else 100 for percentage metrics, else null (open-ended). */
+    /**
+     * Persisted max — delegated to MetricBounds, which resolves from the AI `scale` hint, then an
+     * explicit maxValue (sanity-guarded), then inference (score/rating/percentage -> 100), else
+     * open-ended. This is the single source of truth that ends "0-100 score stored as unbounded".
+     */
     private Double resolveMaxValue(MetricDefinitionResponse dto) {
-        if (dto.getMaxValue() != null) {
-            return dto.getMaxValue();
-        }
-        String unit = dto.getUnit();
-        if (unit != null) {
-            String u = unit.trim().toLowerCase();
-            if (u.equals("%") || u.contains("percent")) {
-                return 100.0;
-            }
-        }
-        return null;
+        return MetricBounds.resolveMax(dto);
     }
 
     private void applyGeneratedSystem(Domain domain, GeneratedSystemResponse generated) {
         Optional.ofNullable(generated.getPlanDescription()).ifPresent(domain::setPlanDescription);
-        Optional.ofNullable(generated.getWeeklySchedule()).ifPresent(domain::setWeeklySchedule);
+        // Honor a user-provided schedule: only fall back to the AI's schedule if none is set.
+        if (domain.getWeeklySchedule() == null || domain.getWeeklySchedule().isBlank()) {
+            Optional.ofNullable(generated.getWeeklySchedule()).ifPresent(domain::setWeeklySchedule);
+        }
         domain.setUpdatedAt(LocalDateTime.now());
         domainRepository.save(domain);
 

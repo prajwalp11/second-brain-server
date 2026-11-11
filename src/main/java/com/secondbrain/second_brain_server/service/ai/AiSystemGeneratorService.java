@@ -28,27 +28,28 @@ public class AiSystemGeneratorService {
     private final PromptBuilder promptBuilder;
     private final ObjectMapper objectMapper;
 
-    public GeneratedSystemResponse generateSystem(DomainType type, SkillLevel level, String linkedUrl, String customName, String context, List<String> existingSchedules) {
+    public GeneratedSystemResponse generateSystem(DomainType type, SkillLevel level, String linkedUrl, String customName, String context, List<String> existingSchedules, String userSchedule) {
         try {
-            String systemPrompt = promptBuilder.systemGenerator(type, level, linkedUrl, customName, context, existingSchedules);
+            String systemPrompt = promptBuilder.systemGenerator(type, level, linkedUrl, customName, context, existingSchedules, userSchedule);
             List<GeminiMessage> messages = List.of(new GeminiMessage("user", List.of(Map.of("text", "Generate the system now."))));
             String rawResponse = geminiClient.completeWithJson(systemPrompt, messages);
             return parseResponse(rawResponse);
         } catch (AiServiceException e) {
             log.error("AI service failed, using fallback system for {} at {} level", type, level, e);
-            return createFallbackSystem(type, level, customName);
+            return createFallbackSystem(type, level, customName, userSchedule);
         }
     }
 
     public GeneratedSystemResponse regenerateSystem(Domain domain) {
         try {
-            String systemPrompt = promptBuilder.systemGenerator(domain.getDomainType(), domain.getSkillLevel(), null, domain.getCustomName(), domain.getContext(), null);
+            // Regeneration respects the domain's existing (user-chosen) schedule as a fixed constraint.
+            String systemPrompt = promptBuilder.systemGenerator(domain.getDomainType(), domain.getSkillLevel(), null, domain.getCustomName(), domain.getContext(), null, domain.getWeeklySchedule());
             List<GeminiMessage> messages = List.of(new GeminiMessage("user", List.of(Map.of("text", "Regenerate the system based on the current domain details."))));
             String rawResponse = geminiClient.completeWithJson(systemPrompt, messages);
             return parseResponse(rawResponse);
         } catch (AiServiceException e) {
             log.error("AI service failed, using fallback system for domain {}", domain.getId(), e);
-            return createFallbackSystem(domain.getDomainType(), domain.getSkillLevel(), domain.getCustomName());
+            return createFallbackSystem(domain.getDomainType(), domain.getSkillLevel(), domain.getCustomName(), domain.getWeeklySchedule());
         }
     }
 
@@ -71,11 +72,14 @@ public class AiSystemGeneratorService {
         }
     }
 
-    private GeneratedSystemResponse createFallbackSystem(DomainType type, SkillLevel level, String customName) {
+    private GeneratedSystemResponse createFallbackSystem(DomainType type, SkillLevel level, String customName, String userSchedule) {
         String displayName = (type == DomainType.CUSTOM && customName != null) ? customName : type.name().toLowerCase();
+        String schedule = (userSchedule != null && !userSchedule.isBlank())
+                ? userSchedule
+                : "Mon,Tue,Wed,Thu,Fri,Sat,Sun";
         return GeneratedSystemResponse.builder()
                 .planDescription("Welcome to your " + displayName + " journey! Start by setting a consistent schedule and tracking your progress.")
-                .weeklySchedule("Mon,Tue,Wed,Thu,Fri,Sat,Sun")
+                .weeklySchedule(schedule)
                 .metrics(List.of())
                 .milestones(List.of())
                 .tasks(List.of())

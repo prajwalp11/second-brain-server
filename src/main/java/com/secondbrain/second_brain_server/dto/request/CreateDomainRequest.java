@@ -20,6 +20,13 @@ public class CreateDomainRequest {
     /** Optional free-text intent/focus to tailor AI generation (e.g. "Spanish, conversational"). */
     private String context;
 
+    /**
+     * User-chosen training days as comma-separated 3-letter names (e.g. "Mon,Wed,Fri").
+     * When provided, this is a FIXED constraint: the AI plans milestones/pacing around it and
+     * must not change it. If null/blank, the AI chooses a schedule as before.
+     */
+    private String weeklySchedule;
+
     @NotNull
     private SkillLevel skillLevel;
 }
