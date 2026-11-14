@@ -12,6 +12,7 @@ import com.secondbrain.second_brain_server.exception.ResourceNotFoundException;
 import com.secondbrain.second_brain_server.repository.DomainRepository;
 import com.secondbrain.second_brain_server.repository.TaskRepository;
 import com.secondbrain.second_brain_server.external.YouTubeService;
+import com.secondbrain.second_brain_server.service.ai.CurriculumService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,7 @@ public class TaskService {
     private final TaskRepository taskRepository;
     private final DomainService domainService;
     private final YouTubeService youTubeService;
+    private final CurriculumService curriculumService;
 
     @Transactional
     public TaskResponse createTask(UUID userId, CreateTaskRequest request) {
@@ -103,7 +105,18 @@ public class TaskService {
         });
         Optional.ofNullable(request.getProgress()).ifPresent(task::setProgress);
 
-        return new TaskResponse(taskRepository.save(task));
+        Task saved = taskRepository.save(task);
+
+        // If this was the last open task of a curriculum step, advance the course right away.
+        if (task.getCurriculumStepId() != null && task.getStatus() == TaskStatus.DONE) {
+            try {
+                curriculumService.advance(task.getDomain());
+            } catch (Exception e) {
+                log.warn("Curriculum advance after task {} failed: {}", taskId, e.getMessage());
+            }
+        }
+
+        return new TaskResponse(saved);
     }
 
     @Transactional

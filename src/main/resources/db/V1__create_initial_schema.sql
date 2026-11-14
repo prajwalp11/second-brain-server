@@ -471,3 +471,73 @@ CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON refresh_tokens(token_hash)
 -- ============================================
 ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_users_google_id_active ON users(google_id) WHERE is_deleted = FALSE AND google_id IS NOT NULL;
+
+
+-- ============================================
+-- AI CURRICULUM + VETTED-VIDEO RESOLUTION (see docs/curriculum-video-design.md)
+-- ============================================
+
+-- VIDEO CACHE — single source of truth for a resolved video, shared across users (D2).
+CREATE TABLE IF NOT EXISTS video_cache (
+    id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    query_key            VARCHAR(500) NOT NULL UNIQUE,   -- normalized query (lowercase/trim/strip-punct/collapse-space)
+    video_url            VARCHAR(500),
+    video_title          VARCHAR(500),
+    channel_id           VARCHAR(255),
+    source               VARCHAR(30),                    -- DIRECT | PLAYLIST_ITEM | SEARCH_FALLBACK
+    confidence           VARCHAR(10),                    -- HIGH | MEDIUM | LOW (YouTube-stats confidence at resolve time)
+    effective_confidence VARCHAR(10),                    -- recomputed on each vote: blend(stats, wilson, f(votes))
+    helpful_count        INT DEFAULT 0,
+    unhelpful_count      INT DEFAULT 0,
+    demoted              BOOLEAN DEFAULT FALSE,           -- true -> resolver skips + re-resolves
+    resolved_at          TIMESTAMP DEFAULT NOW(),
+    updated_at           TIMESTAMP DEFAULT NOW()
+);
+
+-- VIDEO FEEDBACK — one 👍/👎 vote per (video, user); aggregates by query_key.
+CREATE TABLE IF NOT EXISTS video_feedback (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    query_key  VARCHAR(500) NOT NULL,
+    user_id    UUID NOT NULL,
+    helpful    BOOLEAN NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    CONSTRAINT uq_video_feedback_user UNIQUE (query_key, user_id),
+    CONSTRAINT fk_video_feedback_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_video_feedback_query ON video_feedback(query_key);
+
+-- CURRICULUM STEP — one ordered list of steps per domain (D1). Video lives in video_cache;
+-- the step only points to it via video_query_key (D2).
+CREATE TABLE IF NOT EXISTS curriculum_step (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    domain_id        UUID NOT NULL,
+    order_index      INT NOT NULL,
+    phase            VARCHAR(100),          -- AI label ("Push Day" / "Fundamentals") or null
+    title            VARCHAR(255),
+    description      TEXT,
+    status           VARCHAR(20) NOT NULL DEFAULT 'LOCKED',   -- LOCKED | CURRENT | DONE
+    est_minutes      INT,
+    video_query      VARCHAR(255),
+    video_query_key  VARCHAR(500),          -- -> video_cache.query_key (resolved lazily)
+    created_at       TIMESTAMP DEFAULT NOW(),
+    updated_at       TIMESTAMP DEFAULT NOW(),
+    CONSTRAINT fk_curriculum_step_domain FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE,
+    CONSTRAINT uq_curriculum_step_order UNIQUE (domain_id, order_index)
+);
+CREATE INDEX IF NOT EXISTS idx_curriculum_step_domain_status ON curriculum_step(domain_id, status);
+
+-- TASKS — link each task to its curriculum step + mirror order/phase for UI grouping.
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS curriculum_step_id UUID;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS order_index INT;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS phase VARCHAR(100);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'fk_tasks_curriculum_step'
+    ) THEN
+        ALTER TABLE tasks ADD CONSTRAINT fk_tasks_curriculum_step
+            FOREIGN KEY (curriculum_step_id) REFERENCES curriculum_step(id) ON DELETE SET NULL;
+    END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS idx_tasks_curriculum_step ON tasks(curriculum_step_id);

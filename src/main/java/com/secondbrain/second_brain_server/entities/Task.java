@@ -50,6 +50,14 @@ public class Task {
 
     private String linkedResourceTitle;
 
+    @Column(name = "curriculum_step_id")
+    private UUID curriculumStepId;
+
+    @Column(name = "order_index")
+    private Integer orderIndex;
+
+    private String phase;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

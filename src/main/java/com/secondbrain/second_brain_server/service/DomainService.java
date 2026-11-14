@@ -27,6 +27,7 @@ import com.secondbrain.second_brain_server.repository.MilestoneRepository;
 import com.secondbrain.second_brain_server.repository.SessionLogRepository;
 import com.secondbrain.second_brain_server.repository.TaskRepository;
 import com.secondbrain.second_brain_server.service.ai.AiSystemGeneratorService;
+import com.secondbrain.second_brain_server.service.ai.CurriculumService;
 import com.secondbrain.second_brain_server.external.YouTubeService;
 import com.secondbrain.second_brain_server.util.MetricValidator;
 import com.secondbrain.second_brain_server.util.MetricBounds;
@@ -56,6 +57,7 @@ public class DomainService {
     private final TaskRepository taskRepository;
     private final AiSystemGeneratorService aiSystemGeneratorService;
     private final YouTubeService youTubeService;
+    private final CurriculumService curriculumService;
 
     public List<DomainResponse> getDomainsForUser(UUID userId) {
         return domainRepository.findByUserId(userId).stream()
@@ -264,6 +266,9 @@ public class DomainService {
 
         metricDefinitionRepository.deleteByDomainId(domain.getId());
         milestoneRepository.findByDomainId(domain.getId()).forEach(milestoneRepository::delete);
+        // Clear curriculum BEFORE tasks: tasks FK curriculum_step (ON DELETE SET NULL), and a
+        // regenerate must not collide with existing (domain_id, order_index) rows.
+        curriculumService.clear(domain.getId());
         taskRepository.findByDomainId(domain.getId()).forEach(taskRepository::delete);
 
         if (generated.getMetrics() != null) {
@@ -301,7 +306,11 @@ public class DomainService {
             milestoneRepository.saveAll(milestones);
         }
 
-        if (generated.getTasks() != null) {
+        // Curriculum-first: persist the AI's ordered course (step 0 CURRENT + its first task + video).
+        // If a usable curriculum was produced, it OWNS task generation — skip the flat AI tasks.
+        boolean curriculumPersisted = curriculumService.generateAndPersist(domain, generated.getCurriculum());
+
+        if (!curriculumPersisted && generated.getTasks() != null) {
             String domainName = domain.getCustomName() != null ? domain.getCustomName() : domain.getDomainType().name();
             List<Task> tasks = generated.getTasks().stream()
                     .map(dto -> {

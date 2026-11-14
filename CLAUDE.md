@@ -591,3 +591,67 @@ sections were extracted; the other prompts interleave runtime data and stay inli
 ### Deploy
 Rebuild the jar (Gradle, Java 21). No migration. Verify: re-create a UFC/MMA domain — score/rating
 metrics come back capped at 100; mat time / sparring rounds stay open-ended.
+
+
+## Session Log — AI Curriculum + structured tasks + vetted-video system (Stage 1, CURRENT)
+
+Replaces random daily task generation with an **ordered, AI-generated per-domain curriculum** the user
+progresses through, backed by **real/ranked/reused YouTube videos** that improve from user feedback.
+Full design: `docs/curriculum-video-design.md`. Three locked decisions: **D1** one ordered step list per
+domain (repeats = more steps, no loop logic); **D2** a video is stored once in a shared `video_cache`
+and steps point at it via `query_key` (read-through, step rows hold no url/title); **D3** a step advances
+only when ALL of its tasks are DONE.
+
+### Schema (appended to the single `db/V1__create_initial_schema.sql`, idempotent)
+- `video_cache` (query_key UNIQUE, video_id/url/title, source, confidence, **effective_confidence**,
+  helpful_count/unhelpful_count, demoted).
+- `video_feedback` (UNIQUE(query_key, user_id) — one vote per user per resolved video).
+- `curriculum_step` (UNIQUE(domain_id, order_index), phase, status, est_minutes, **video_query +
+  video_query_key only** — no url/title per D2).
+- `tasks` gained `curriculum_step_id` (FK ON DELETE SET NULL) + `order_index` + `phase`.
+No Flyway — run the updated V1 SQL manually on prod before deploy.
+
+### Flow
+- **Create domain:** `AiSystemGeneratorService` now also returns a `curriculum` list (validated by
+  `util/CurriculumValidator`: contiguous orderIndex, title required, specific videoQuery, MIN 3 / MAX 30
+  steps). `DomainService.applyGeneratedSystem` persists the curriculum FIRST (step 0 = CURRENT, rest
+  LOCKED) via `CurriculumService.generateAndPersist`; only if no usable curriculum does it fall back to
+  the old flat AI task list.
+- **Video resolution (`service/ai/VideoResolver`):** cache hit (skip demoted) → YouTube
+  `searchCandidates` → `enrich` stats → sanity (duration 60s–90min + on-topic term overlap) → relative
+  composite score (log views + like ratio + on-topic) → confidence HIGH/MED/LOW → search-URL fallback →
+  upsert `video_cache`. `query_key` = lowercase/strip-punct/collapse-space (NO reorder), shared across
+  steps. Degrades to a search URL when `YOUTUBE_API_KEY` is unset.
+- **Advance (`CurriculumService.advance`):** when all of the CURRENT step's tasks are DONE/SKIPPED → mark
+  DONE, unlock next, instantiate its task. On the final step → `extend()` (AI appends the next block).
+  Triggered immediately from `TaskService.updateTaskStatus` on completion, and as a safety net by the
+  5 AM `TaskGenerationService` loop (curriculum domains route to `advance`, others to flat generation).
+- **Feedback (`VideoFeedbackService`, `POST /api/tasks/{taskId}/video-feedback`):** keyed by the video's
+  shared query_key so votes pool across users. `effective_confidence` = volume-weighted blend of stats
+  confidence and Wilson lower bound (VOTE_PIVOT=5); a video with ≥5 votes and Wilson < 0.40 is demoted
+  and skipped by future cache lookups (forces a fresh resolve).
+- **Read:** `GET /api/domains/{domainId}/curriculum` → ordered `CurriculumStepResponse[]` with status +
+  read-through video (url/title/effectiveConfidence/vote counts) from `video_cache`. `TaskResponse`
+  gained `phase` + `orderIndex` for grouped/ordered display.
+
+### Credit/bug hardening (this session)
+- `advance()` no longer auto-extends when there is no CURRENT step — extend fires **exactly once**, when
+  the final step completes. Previously every completion AND every 5 AM run on a finished course fired an
+  AI extend call.
+- `instantiateTask` is **idempotent** (returns early if the step already has a task) — no duplicate task
+  or AI call if `advance()` is triggered twice (completion + scheduler).
+- First-step instantiation at domain creation skips the AI `curriculumTask` shaping call (`shape=false`)
+  — no progress history exists yet, so it was wasted. Domain creation dropped 2 AI calls → 1. AI shaping
+  stays on `advance()`/`extend()` where user history exists.
+- Regenerate fix: `applyGeneratedSystem` now calls `curriculumService.clear(domainId)` (new
+  `CurriculumStepRepository.deleteByDomainId`) BEFORE deleting tasks, so a regenerate doesn't collide on
+  `(domain_id, order_index)` or leave orphaned steps.
+
+### Env
+No new variables. Reuses `GEMINI_API_KEY` (curriculum generation + hybrid task shaping) and
+`YOUTUBE_API_KEY` (video vetting; optional — graceful search-URL fallback). `.env.example` note updated.
+
+### Deploy
+1. Run the updated `db/V1__create_initial_schema.sql` on prod Postgres (new tables + `tasks` columns —
+   all `IF NOT EXISTS`). 2. Rebuild jar (Gradle, Java 21) + deploy. 3. Rebuild the app.
+Not compiled in WSL (no JDK/Gradle here); builds on Windows. App typecheck clean (`tsc --noEmit`).

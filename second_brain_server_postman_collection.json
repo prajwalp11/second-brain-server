@@ -442,6 +442,32 @@
           "response": []
         },
         {
+          "name": "Get Curriculum",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/domains/{{domainId}}/curriculum",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "domains",
+                "{{domainId}}",
+                "curriculum"
+              ]
+            },
+            "description": "Ordered curriculum (course map) for a domain. Returns the full step list sorted by orderIndex, each with status (LOCKED | CURRENT | DONE) and — read through from the shared video_cache by the step's query_key (design D2) — videoUrl, videoTitle, videoConfidence (HIGH | MEDIUM | LOW; effective_confidence if feedback exists), and helpful/unhelpful counts. LOCKED steps are not yet started; exactly one step is CURRENT at a time (advances only when all of a step's tasks are DONE). When every step is DONE the AI appends the next block automatically on the next completion (EXTEND). Requires ownership of the domain."
+          },
+          "response": []
+        },
+        {
           "name": "Pause Domain",
           "request": {
             "method": "POST",
@@ -1087,6 +1113,40 @@
                 "{{taskId}}"
               ]
             }
+          },
+          "response": []
+        },
+        {
+          "name": "Video Feedback",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"helpful\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks/{{taskId}}/video-feedback",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tasks",
+                "{{taskId}}",
+                "video-feedback"
+              ]
+            },
+            "description": "One-tap 👍/👎 on the YouTube video attached to a curriculum task. Body: { \"helpful\": true|false }. The vote is keyed by the video's shared query_key (video_cache), so feedback from any user on the same resolved video folds into that video's effective_confidence (Wilson lower bound blended with view/like stats; VOTE_PIVOT=5). A video with >=5 votes and a Wilson lower bound < 0.40 is demoted and skipped by future cache lookups. Requires ownership of the task; the task must have a resolved (non-fallback) video."
           },
           "response": []
         }

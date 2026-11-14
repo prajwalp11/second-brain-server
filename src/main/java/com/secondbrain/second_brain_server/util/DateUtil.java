@@ -108,4 +108,28 @@ public final class DateUtil {
 
         return days;
     }
+
+    /**
+     * Returns the first date on or after {@code from} whose day-of-week is in the schedule.
+     * If the schedule is empty/unparseable, falls back to {@code from} itself so a task is
+     * never left without a due date.
+     *
+     * @param weeklySchedule comma-separated day names (e.g. "Tue,Thu,Sat")
+     * @param from           the earliest acceptable date (inclusive)
+     * @return the next scheduled training day on/after {@code from}
+     */
+    public static LocalDate nextScheduledOnOrAfter(String weeklySchedule, LocalDate from) {
+        Set<DayOfWeek> scheduledDays = parseWeeklySchedule(weeklySchedule);
+        if (scheduledDays.isEmpty()) {
+            return from;
+        }
+        LocalDate candidate = from;
+        for (int i = 0; i < 7; i++) {
+            if (scheduledDays.contains(candidate.getDayOfWeek())) {
+                return candidate;
+            }
+            candidate = candidate.plusDays(1);
+        }
+        return from; // unreachable when schedule is non-empty
+    }
 }

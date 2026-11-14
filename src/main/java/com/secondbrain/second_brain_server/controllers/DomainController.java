@@ -3,10 +3,12 @@ package com.secondbrain.second_brain_server.controllers;
 import com.secondbrain.second_brain_server.dto.request.CreateDomainRequest;
 import com.secondbrain.second_brain_server.dto.request.UpdateDomainRequest;
 import com.secondbrain.second_brain_server.dto.response.DomainResponse;
+import com.secondbrain.second_brain_server.dto.response.CurriculumStepResponse;
 import com.secondbrain.second_brain_server.dto.response.GeneratedSystemResponse;
 import com.secondbrain.second_brain_server.dto.response.TimeSeriesPointResponse;
 import com.secondbrain.second_brain_server.security.CurrentUser;
 import com.secondbrain.second_brain_server.service.DomainService;
+import com.secondbrain.second_brain_server.service.ai.CurriculumService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +25,7 @@ import java.util.UUID;
 public class DomainController {
 
     private final DomainService domainService;
+    private final CurriculumService curriculumService;
 
     @GetMapping
     public ResponseEntity<List<DomainResponse>> getDomains(@CurrentUser UUID userId) {
@@ -32,6 +35,13 @@ public class DomainController {
     @GetMapping("/{domainId}")
     public ResponseEntity<DomainResponse> getDomain(@PathVariable UUID domainId, @CurrentUser UUID userId) {
         return ResponseEntity.ok(domainService.getDomainById(domainId, userId));
+    }
+
+    /** Ordered curriculum (course map) for a domain, with read-through video info. */
+    @GetMapping("/{domainId}/curriculum")
+    public ResponseEntity<List<CurriculumStepResponse>> getCurriculum(@PathVariable UUID domainId, @CurrentUser UUID userId) {
+        domainService.assertOwnership(domainId, userId);
+        return ResponseEntity.ok(curriculumService.getCurriculum(domainId));
     }
 
     @GetMapping("/{domainId}/chart-data")

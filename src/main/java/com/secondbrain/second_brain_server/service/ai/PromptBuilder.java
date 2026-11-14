@@ -6,6 +6,7 @@ import com.secondbrain.second_brain_server.dto.response.SessionLogResponse;
 import com.secondbrain.second_brain_server.dto.response.WeeklyStatResponse;
 import com.secondbrain.second_brain_server.entities.Domain;
 import com.secondbrain.second_brain_server.entities.DomainMetricDefinition;
+import com.secondbrain.second_brain_server.entities.CurriculumStep;
 import com.secondbrain.second_brain_server.entities.Milestone;
 import com.secondbrain.second_brain_server.entities.SessionLog;
 import com.secondbrain.second_brain_server.enums.ChatMode;
@@ -40,7 +41,9 @@ public class PromptBuilder {
         prompt.append("Today's date is: ").append(today.format(DATE_FORMATTER)).append(" (").append(dayOfWeek).append(")\n");
         prompt.append("Your task is to generate a comprehensive system for a user's new domain based on their input.\n");
         prompt.append(PromptTemplates.SYSTEM_GENERATOR_SCHEMA);
+        prompt.append(PromptTemplates.CURRICULUM_SCHEMA);
         prompt.append(PromptTemplates.SYSTEM_GENERATOR_GUIDELINES);
+        prompt.append(PromptTemplates.CURRICULUM_GUIDELINES);
         prompt.append("User Input:\n");
         prompt.append("Domain Type: ").append(type).append("\n");
         prompt.append("Skill Level: ").append(level).append("\n");
@@ -53,16 +56,24 @@ public class PromptBuilder {
         if (url != null && !url.isEmpty()) {
             prompt.append("User's provided resource (use only if it looks like a real, relevant URL): ").append(url).append("\n");
         }
+        boolean hasFixedSchedule = userSchedule != null && !userSchedule.isBlank();
         if (existingSchedules != null && !existingSchedules.isEmpty()) {
-            prompt.append("EXISTING SCHEDULES (AVOID CONFLICTS - pick different days where possible):\n");
+            if (hasFixedSchedule) {
+                // User already fixed the days (below), so the AI is NOT choosing days — showing the
+                // other domains' days as "avoid" would contradict the mandatory schedule. Present
+                // them as context only (useful for pacing/load awareness), not a constraint.
+                prompt.append("USER'S OTHER DOMAIN SCHEDULES (for context — the user already trains on these days):\n");
+            } else {
+                prompt.append("EXISTING SCHEDULES (AVOID CONFLICTS - pick different days where possible):\n");
+            }
             for (String schedule : existingSchedules) {
                 prompt.append("  - ").append(schedule).append("\n");
             }
         }
-        if (userSchedule != null && !userSchedule.isBlank()) {
+        if (hasFixedSchedule) {
             prompt.append("\nFIXED USER SCHEDULE (MANDATORY): The user will train on EXACTLY these days: ")
                   .append(userSchedule).append(".\n");
-            prompt.append("- You MUST set \"weeklySchedule\" to exactly these days (same 3-letter names, same set) — do NOT add, remove, or change any day.\n");
+            prompt.append("- You MUST set \"weeklySchedule\" to exactly these days (same 3-letter names, same set) — do NOT add, remove, or change any day, even if they overlap another domain.\n");
             prompt.append("- Build planDescription, milestone deadlines, and task pacing AROUND this exact weekly cadence (").append(userSchedule).append("). Do NOT assume a different number of sessions per week.\n");
         }
         prompt.append("Generate the system now.\n");
@@ -314,6 +325,58 @@ public class PromptBuilder {
         prompt.append(PromptTemplates.TASK_GENERATION_OUTPUT);
 
         return prompt.toString();
+    }
+
+    /**
+     * HYBRID single-step task (design §7.2): the TOPIC is fixed by the curriculum step; the AI only
+     * calibrates the difficulty/wording to the user's level/pace. Returns ONE task as a JSON object.
+     */
+    public String curriculumTask(Domain domain, String phase, String stepTitle, String stepDescription) {
+        LocalDate today = LocalDate.now();
+        StringBuilder p = new StringBuilder();
+        p.append("You are an AI coach for the 'Second Brain' app. Today is ")
+         .append(today.format(DATE_FORMATTER)).append(".\n");
+        p.append("Create exactly ONE actionable task for the user's CURRENT curriculum step. Do NOT\n");
+        p.append("change the topic — only phrase it as a concrete, doable task and calibrate it to the\n");
+        p.append("user's skill level.\n\n");
+        p.append("DOMAIN: ").append(domain.getCustomName() != null ? domain.getCustomName() : domain.getDomainType())
+         .append(" (skill: ").append(domain.getSkillLevel()).append(")\n");
+        if (phase != null && !phase.isBlank()) p.append("PHASE: ").append(phase).append("\n");
+        p.append("CURRENT STEP: ").append(stepTitle).append("\n");
+        if (stepDescription != null && !stepDescription.isBlank()) {
+            p.append("STEP DETAIL: ").append(stepDescription).append("\n");
+        }
+        if (domain.getCurrentStreak() != null) p.append("Current streak: ").append(domain.getCurrentStreak()).append(" days\n");
+        p.append("\nOutput MUST be a single valid JSON object:\n");
+        p.append("{\n");
+        p.append("  \"title\": \"string (concise, max 60 chars)\",\n");
+        p.append("  \"description\": \"string (1-2 sentences, specific and actionable for THIS step)\",\n");
+        p.append("  \"dueDate\": \"YYYY-MM-DD (within the next 7 days, from tomorrow)\"\n");
+        p.append("}\n");
+        return p.toString();
+    }
+
+    /**
+     * EXTEND (design §7.4): the user finished the whole course; generate the NEXT block of ordered
+     * steps that continue from what they already completed (harder / deeper). Same per-step JSON as
+     * the curriculum contract.
+     */
+    public String curriculumExtend(Domain domain, List<CurriculumStep> completed) {
+        StringBuilder p = new StringBuilder();
+        p.append("You are an expert curriculum designer for the 'Second Brain' app.\n");
+        p.append("The user has COMPLETED the steps below for this domain. Generate the NEXT block of\n");
+        p.append("5-10 ordered steps that build on them (more advanced; do not repeat earlier steps).\n\n");
+        p.append("DOMAIN: ").append(domain.getCustomName() != null ? domain.getCustomName() : domain.getDomainType())
+         .append(" (skill: ").append(domain.getSkillLevel()).append(")\n");
+        p.append("COMPLETED STEPS (in order):\n");
+        completed.forEach(s -> p.append("  ").append(s.getOrderIndex()).append(". ")
+                .append(s.getPhase() != null ? "[" + s.getPhase() + "] " : "").append(s.getTitle()).append("\n"));
+        p.append("\n");
+        p.append(PromptTemplates.CURRICULUM_GUIDELINES);
+        p.append("Output MUST be a valid JSON array of step objects with fields:\n");
+        p.append("orderIndex (0-based within THIS block), phase (string or null), title, description,\n");
+        p.append("estMinutes (integer), videoQuery (precise 3-6 word search phrase for the step's skill).\n");
+        return p.toString();
     }
 
     /**

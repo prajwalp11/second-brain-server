@@ -36,6 +36,7 @@ public class TaskGenerationService {
     private final GeminiClient geminiClient;
     private final ObjectMapper objectMapper;
     private final YouTubeService youTubeService;
+    private final CurriculumService curriculumService;
 
     @org.springframework.beans.factory.annotation.Value("${tasks.generation.max-per-domain:5}")
     private int maxTasksPerDomain;
@@ -57,7 +58,11 @@ public class TaskGenerationService {
 
         for (Domain domain : activeDomains) {
             try {
-                int generated = generateTasksForDomain(userId, domain, context);
+                // Curriculum-backed domains advance their course (D3: only when the step's tasks are
+                // done); legacy/un-curriculumed domains use the original flat AI generation.
+                int generated = curriculumService.hasCurriculum(domain.getId())
+                        ? curriculumService.advance(domain)
+                        : generateTasksForDomain(userId, domain, context);
                 totalGenerated += generated;
             } catch (Exception e) {
                 log.error("Failed to generate tasks for user {} domain {}: {}", userId, domain.getId(), e.getMessage());

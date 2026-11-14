@@ -25,6 +25,8 @@ public class TaskResponse {
     private Long daysRemaining;
     private String linkedResourceUrl;
     private String linkedResourceTitle;
+    private String phase;
+    private Integer orderIndex;
 
     public TaskResponse(Task task) {
         this.id = task.getId();
@@ -37,5 +39,7 @@ public class TaskResponse {
         this.aiGenerated = task.isAiGenerated();
         this.linkedResourceUrl = task.getLinkedResourceUrl();
         this.linkedResourceTitle = task.getLinkedResourceTitle();
+        this.phase = task.getPhase();
+        this.orderIndex = task.getOrderIndex();
     }
 }

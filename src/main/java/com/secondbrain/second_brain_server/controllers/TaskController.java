@@ -2,11 +2,13 @@ package com.secondbrain.second_brain_server.controllers;
 
 import com.secondbrain.second_brain_server.dto.request.CreateTaskRequest;
 import com.secondbrain.second_brain_server.dto.request.UpdateTaskStatusRequest;
+import com.secondbrain.second_brain_server.dto.request.VideoFeedbackRequest;
 import com.secondbrain.second_brain_server.dto.response.TaskResponse;
 import com.secondbrain.second_brain_server.enums.TaskStatus;
 import com.secondbrain.second_brain_server.security.CurrentUser;
 import com.secondbrain.second_brain_server.service.TaskService;
 import com.secondbrain.second_brain_server.service.ai.TaskGenerationService;
+import com.secondbrain.second_brain_server.service.ai.VideoFeedbackService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +27,7 @@ public class TaskController {
 
     private final TaskService taskService;
     private final TaskGenerationService taskGenerationService;
+    private final VideoFeedbackService videoFeedbackService;
 
     @GetMapping
     public ResponseEntity<List<TaskResponse>> getTasks(@RequestParam(required = false) TaskStatus status,
@@ -58,5 +61,14 @@ public class TaskController {
     public ResponseEntity<Map<String, Integer>> generateTasks(@CurrentUser UUID userId) {
         int generated = taskGenerationService.generateTasksForUser(userId);
         return ResponseEntity.ok(Map.of("tasksGenerated", generated));
+    }
+
+    /** 👍/👎 on the video attached to a task; folds into that video's confidence (and may demote it). */
+    @PostMapping("/{taskId}/video-feedback")
+    public ResponseEntity<Void> videoFeedback(@PathVariable UUID taskId,
+                                              @Valid @RequestBody VideoFeedbackRequest request,
+                                              @CurrentUser UUID userId) {
+        videoFeedbackService.recordForTask(taskId, userId, request.getHelpful());
+        return ResponseEntity.ok().build();
     }
 }

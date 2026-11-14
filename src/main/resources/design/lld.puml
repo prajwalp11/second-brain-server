@@ -281,6 +281,9 @@ package "entities" {
     - aiGenerated : boolean
     - linkedResourceUrl : String
     - linkedResourceTitle : String
+    - curriculumStepId : UUID <<FK>>
+    - orderIndex : Integer
+    - phase : String
     - createdAt : LocalDateTime
     --
     + toDto() : TaskDto
@@ -339,6 +342,77 @@ package "entities" {
     visible; not counted against daily limit.
     Health lives with the message (correct
     grain) — separate from scheduler audit.
+  end note
+
+  class CurriculumStep {
+    - id : UUID <<PK>>
+    - domainId : UUID <<FK>>
+    - orderIndex : int
+    - phase : String
+    - title : String
+    - description : String
+    - estMinutes : Integer
+    - status : StepStatus <<enum>>
+    - videoQuery : String
+    - videoQueryKey : String
+    - createdAt : LocalDateTime
+    - updatedAt : LocalDateTime
+  }
+  note right of CurriculumStep
+    One ordered list per domain (design D1):
+    repeats = more steps, no loop logic.
+    UNIQUE(domain_id, order_index).
+    Exactly one CURRENT step at a time;
+    advance to next only when ALL of a
+    step's tasks are DONE (D3).
+    Stores NO video url/title (D2) — only
+    videoQuery + videoQueryKey, a pointer
+    into the shared video_cache (read-
+    through). Cleared + regenerated on
+    domain regenerate.
+  end note
+
+  class VideoCache {
+    - id : UUID <<PK>>
+    - queryKey : String <<unique>>
+    - videoId : String
+    - videoUrl : String
+    - videoTitle : String
+    - source : VideoSource <<enum>>
+    - confidence : Confidence <<enum>>
+    - effectiveConfidence : Confidence <<enum>>
+    - helpfulCount : int
+    - unhelpfulCount : int
+    - demoted : boolean
+    - createdAt : LocalDateTime
+    - updatedAt : LocalDateTime
+  }
+  note right of VideoCache
+    One row per normalized query_key (D2):
+    a video is resolved once and reused by
+    every step that shares the key.
+    queryKey = lowercase/strip-punct/
+    collapse-space (NO reorder).
+    confidence = resolver's stats-based
+    rank; effectiveConfidence folds in user
+    feedback (see VideoFeedbackService).
+    demoted=true -> skipped by cache lookup,
+    forcing a fresh resolve.
+  end note
+
+  class VideoFeedback {
+    - id : UUID <<PK>>
+    - queryKey : String <<FK-ish>>
+    - userId : UUID <<FK>>
+    - helpful : boolean
+    - createdAt : LocalDateTime
+  }
+  note right of VideoFeedback
+    UNIQUE(query_key, user_id) — one vote
+    per user per resolved video; re-voting
+    upserts. Aggregated back onto
+    VideoCache.helpful/unhelpfulCount and
+    effectiveConfidence.
   end note
 
   
@@ -410,6 +484,21 @@ package "enums" {
   enum ChatMode {
     ADJUST_PLAN
     DATA_QUERY
+  }
+  enum StepStatus {
+    LOCKED
+    CURRENT
+    DONE
+  }
+  enum VideoSource {
+    DIRECT
+    PLAYLIST_ITEM
+    SEARCH_FALLBACK
+  }
+  enum Confidence {
+    HIGH
+    MEDIUM
+    LOW
   }
 }
 
@@ -697,7 +786,42 @@ package "dto_response" {
     + linkedResourceUrl : String
     + linkedResourceTitle : String
     + tasks : List<TaskDto>
+    + curriculum : List<GeneratedCurriculumStep>
   }
+  class GeneratedCurriculumStep {
+    + orderIndex : int
+    + phase : String
+    + title : String
+    + description : String
+    + estMinutes : Integer
+    + videoQuery : String
+  }
+  note right of GeneratedCurriculumStep
+    AI contract item (system generator +
+    extend). Normalized by CurriculumValidator
+    (contiguous orderIndex, title required,
+    specific videoQuery, MIN_STEPS=3/MAX=30)
+    before persist.
+  end note
+  class CurriculumStepResponse {
+    + id : UUID
+    + orderIndex : int
+    + phase : String
+    + title : String
+    + description : String
+    + status : StepStatus
+    + estMinutes : Integer
+    + videoUrl : String
+    + videoTitle : String
+    + videoConfidence : Confidence
+    + helpfulCount : int
+    + unhelpfulCount : int
+  }
+  note right of CurriculumStepResponse
+    Course-map read model. video* fields are
+    read through from video_cache by the step's
+    query_key (D2) — the step row stores none.
+  end note
   class ApiError {
     + status : Integer
     + message : String
@@ -773,6 +897,7 @@ package "repositories" {
     + findByUserIdAndStatusIn(userId: UUID, statuses: List<TaskStatus>) : List<Task>
     + findByUserIdAndDueDateAndStatusIn(userId: UUID, date: LocalDate, statuses: List<TaskStatus>) : List<Task>
     + findByDomainId(domainId: UUID) : List<Task>
+    + findByCurriculumStepId(curriculumStepId: UUID) : List<Task>
     + countByUserIdAndStatusAndDueDateBetween(userId: UUID, status: TaskStatus, from: LocalDate, to: LocalDate) : Long
   }
   interface AiNudgeRepository {
@@ -801,6 +926,22 @@ package "repositories" {
     + findByTokenHash(tokenHash: String) : Optional<RefreshToken>
     + revokeAllForUser(userId: UUID) : void
     + deleteRevokedOrExpired(now: LocalDateTime) : int
+  }
+
+  interface CurriculumStepRepository {
+    + findByDomainIdOrderByOrderIndexAsc(domainId: UUID) : List<CurriculumStep>
+    + findFirstByDomainIdAndStatus(domainId: UUID, status: StepStatus) : Optional<CurriculumStep>
+    + findFirstByDomainIdAndStatusAndOrderIndexGreaterThanOrderByOrderIndexAsc(domainId: UUID, status: StepStatus, orderIndex: int) : Optional<CurriculumStep>
+    + countByDomainId(domainId: UUID) : long
+    + countByDomainIdAndStatus(domainId: UUID, status: StepStatus) : long
+    + deleteByDomainId(domainId: UUID) : void
+  }
+  interface VideoCacheRepository {
+    + findByQueryKey(queryKey: String) : Optional<VideoCache>
+  }
+  interface VideoFeedbackRepository {
+    + findByQueryKeyAndUserId(queryKey: String, userId: UUID) : Optional<VideoFeedback>
+    + countByQueryKeyAndHelpful(queryKey: String, helpful: boolean) : long
   }
   
   
@@ -1201,6 +1342,8 @@ package "service.ai" {
     + nudge(domain: Domain, logs: List<SessionLog>, type: NudgeType) : String
     + chat(context: UserContext, chatMode: ChatMode, domainName: String) : String
     + taskGeneration(context: UserContext, domain: Domain) : String
+    + curriculumTask(domain: Domain, phase: String, stepTitle: String, stepDescription: String) : String
+    + curriculumExtend(domain: Domain, completed: List<CurriculumStep>) : String
     + weeklyInsight(stats: List<WeeklyStatDto>, prs: List<PersonalRecordDto>) : String
     + nextMilestone(domain: Domain, metrics: List<DomainMetricDefinition>, lastCompleted: Milestone) : String
   }
@@ -1243,6 +1386,89 @@ package "service.ai" {
     AI sees recent logs, PRs, streaks,
     milestones, feel patterns to create
     progressive, context-aware tasks.
+    CURRICULUM ROUTING: for a curriculum-backed
+    domain the daily loop calls
+    curriculumService.advance(domain) instead of
+    flat generation (one ordered task at a time).
+  end note
+  class CurriculumService {
+    - curriculumStepRepository : CurriculumStepRepository
+    - taskRepository : TaskRepository
+    - videoResolver : VideoResolver
+    - videoCacheRepository : VideoCacheRepository
+    - promptBuilder : PromptBuilder
+    - geminiClient : GeminiClient
+    - objectMapper : ObjectMapper
+    --
+    + hasCurriculum(domainId: UUID) : boolean
+    + clear(domainId: UUID) : void
+    + getCurriculum(domainId: UUID) : List<CurriculumStepResponse>
+    + generateAndPersist(domain: Domain, raw: List<GeneratedCurriculumStep>) : boolean
+    + advance(domain: Domain) : int
+    + extend(domain: Domain) : int
+    - instantiateTask(domain: Domain, step: CurriculumStep, shape: boolean) : void
+    - shapeTaskForStep(domain: Domain, step: CurriculumStep) : TaskDraft
+    - allTasksDone(stepId: UUID) : boolean
+  }
+  note right of CurriculumService
+    Owns the ordered per-domain curriculum.
+    generateAndPersist: step0=CURRENT rest LOCKED,
+      instantiate first step's task with shape=false
+      (no logs yet -> skip AI shaping, saves a call).
+    advance: when ALL of the CURRENT step's tasks are
+      DONE/SKIPPED -> mark step DONE, unlock next
+      (shape=true), instantiate its task. On the final
+      step -> extend() once. No CURRENT step -> return 0
+      (never re-extends on every call/scheduler run).
+    instantiateTask is idempotent (skips if the step
+      already has a task) -> no duplicate task/AI call.
+    extend: AI appends the next block after the last
+      orderIndex; validated by CurriculumValidator.
+    Read-through: getCurriculum joins video_cache by
+      videoQueryKey (D2) for url/title/effectiveConfidence.
+  end note
+  class VideoResolver {
+    - youTubeService : YouTubeService
+    - videoCacheRepository : VideoCacheRepository
+    --
+    + resolve(videoQuery: String, domainName: String) : ResolvedVideo
+    + keyFor(videoQuery: String) : String
+    - sanityOk(c: Candidate, query: String, domainName: String) : boolean
+    - score(c: Candidate, pool: List<Candidate>) : double
+    - confidenceFor(score: double, source: VideoSource) : Confidence
+  }
+  note right of VideoResolver
+    resolve(): cache hit (skip demoted) -> else
+    search candidates -> enrich stats -> sanity
+    (duration 60s..90min + on-topic term overlap)
+    -> relative composite score (log views +
+    like ratio + on-topic) -> confidence HIGH/
+    MED/LOW -> search-URL fallback if nothing
+    passes -> upsert video_cache. queryKey is the
+    shared normalized key (D2). Degrades to a
+    search URL when YOUTUBE_API_KEY is unset.
+  end note
+  class VideoFeedbackService {
+    - taskRepository : TaskRepository
+    - curriculumStepRepository : CurriculumStepRepository
+    - videoCacheRepository : VideoCacheRepository
+    - videoFeedbackRepository : VideoFeedbackRepository
+    --
+    + recordForTask(taskId: UUID, userId: UUID, helpful: boolean) : void
+    - record(queryKey: String, userId: UUID, helpful: boolean) : void
+    - wilsonLowerBound(up: long, total: long) : double
+    - recompute(cache: VideoCache) : void
+  }
+  note right of VideoFeedbackService
+    recordForTask: ownership-checks the task,
+    resolves its step's query_key, upserts the
+    user's vote (UNIQUE query_key+user_id),
+    recomputes helpful/unhelpfulCount +
+    effectiveConfidence = volume-weighted blend
+    of stats confidence and Wilson lower bound
+    (VOTE_PIVOT=5). Demotes (demoted=true) when
+    >=5 votes and Wilson < 0.40 so the cache
+    stops serving a disliked video.
   end note
   class UserContext {
     + userId : UUID
@@ -1315,6 +1541,37 @@ package "external" {
     + name : String
     + emailVerified : boolean
   }
+  class YouTubeService {
+    - apiKey : String <<@Value youtube.api.key>>
+    - restTemplate : RestTemplate
+    --
+    + isApiConfigured() : boolean
+    + searchResultsUrl(query: String) : String
+    + searchCandidates(query: String, max: int) : List<Candidate>
+    + enrich(candidates: List<Candidate>) : List<Candidate>
+    + {static} watchUrl(videoId: String) : String
+  }
+  note right of YouTubeService
+    Thin YouTube Data API client. searchCandidates
+    does search.list; enrich does videos.list
+    (statistics + contentDetails) to fill
+    views/likes/comments/durationSeconds used by
+    VideoResolver's ranking. No persistence here —
+    caching/ranking live in VideoResolver. All
+    methods degrade to empty/search-URL when the
+    key is unset (isApiConfigured()==false).
+  end note
+  class Candidate {
+    + videoId : String
+    + title : String
+    + description : String
+    + channelId : String
+    + publishedAt : String
+    + views : long
+    + likes : long
+    + comments : long
+    + durationSeconds : int
+  }
 }
 
 ' ============================================================
@@ -1347,9 +1604,11 @@ package "controllers" {
   end note
   class DomainController {
     - domainService : DomainService
+    - curriculumService : CurriculumService
     --
     + getDomains() : ResponseEntity<List<DomainDto>>
     + getDomain(domainId: UUID) : ResponseEntity<DomainDto>
+    + getCurriculum(domainId: UUID) : ResponseEntity<List<CurriculumStepResponse>>
     + createDomain(request: CreateDomainRequest) : ResponseEntity<DomainDto>
     + updateDomain(domainId: UUID, request: UpdateDomainRequest) : ResponseEntity<DomainDto>
     + pauseDomain(domainId: UUID) : ResponseEntity<Void>
@@ -1381,12 +1640,14 @@ package "controllers" {
   class TaskController {
     - taskService : TaskService
     - taskGenerationService : TaskGenerationService
+    - videoFeedbackService : VideoFeedbackService
     --
     + getTasks(status: TaskStatus, domainId: UUID) : ResponseEntity<List<TaskDto>>
     + getTodayTasks() : ResponseEntity<List<TaskDto>>
     + createTask(request: CreateTaskRequest) : ResponseEntity<TaskDto>
     + updateTask(taskId: UUID, request: UpdateTaskStatusRequest) : ResponseEntity<TaskDto>
     + deleteTask(taskId: UUID) : ResponseEntity<Void>
+    + videoFeedback(taskId: UUID, request: VideoFeedbackRequest) : ResponseEntity<Void>
     + generateTasks() : ResponseEntity<Map<String, Integer>>
   }
   class MilestoneController {
@@ -1721,6 +1982,18 @@ package "util" {
   class ContextWindowUtil {
     + truncateToLimit(text: String, maxTokens: Integer) : String
   }
+  class CurriculumValidator {
+    + {static} normalize(raw: List<GeneratedCurriculumStep>, domainName: String) : List<GeneratedCurriculumStep>
+    + {static} isUsable(steps: List<GeneratedCurriculumStep>) : boolean
+  }
+  note right of CurriculumValidator
+    Sanitizes the AI curriculum before persist:
+    contiguous orderIndex from 0, title required,
+    ensureSpecificQuery (>=3 words or derived from
+    title), caps phase/estMinutes, enforces
+    MIN_STEPS=3 / MAX_STEPS=30. isUsable() gates the
+    fallback to flat task generation.
+  end note
   class WebMvcConfig {
     - currentUserArgumentResolver : CurrentUserArgumentResolver
     --
@@ -1749,9 +2022,14 @@ Domain "1" --> "many" SessionLog : contains
 Domain "1" --> "many" Milestone : tracks
 Domain "1" --> "many" PersonalRecord : records
 Domain "1" --> "many" Task : has
+Domain "1" --> "many" CurriculumStep : ordered steps
 
 SessionLog "1" --> "many" SessionMetricValue : captures
 AiConversation "1" --> "many" AiMessage : contains
+
+CurriculumStep "1" --> "0..1" Task : instantiates
+CurriculumStep "many" ..> "1" VideoCache : query_key (read-through, D2)
+VideoCache "1" --> "many" VideoFeedback : aggregates votes
 
 ' ============================================================
 ' SERVICE → REPOSITORY
@@ -1775,6 +2053,7 @@ DomainService ..> DomainMetricDefinitionRepository : uses
 DomainService ..> MilestoneRepository : uses
 DomainService ..> TaskRepository : uses
 DomainService ..> AiSystemGeneratorService : uses
+DomainService ..> CurriculumService : persists/clears curriculum
 
 SessionLogService ..> SessionLogRepository : uses
 SessionLogService ..> SessionMetricValueRepository : uses
@@ -1849,17 +2128,35 @@ UserContextAssembler ..> DomainRepository : uses
 UserContextAssembler ..> MilestoneRepository : uses
 UserContextAssembler ..> TaskRepository : uses
 
+CurriculumService ..> CurriculumStepRepository : uses
+CurriculumService ..> TaskRepository : uses
+CurriculumService ..> VideoCacheRepository : read-through
+CurriculumService ..> VideoResolver : resolves step video
+CurriculumService ..> PromptBuilder : uses
+CurriculumService ..> GeminiClient : calls (shape/extend)
+CurriculumService ..> CurriculumValidator : validates
+
+VideoResolver ..> YouTubeService : search/enrich
+VideoResolver ..> VideoCacheRepository : cache upsert
+
+VideoFeedbackService ..> TaskRepository : ownership
+VideoFeedbackService ..> CurriculumStepRepository : resolves query_key
+VideoFeedbackService ..> VideoCacheRepository : updates confidence
+VideoFeedbackService ..> VideoFeedbackRepository : upserts vote
+
 ' ============================================================
 ' CONTROLLER → SERVICE
 ' ============================================================
 AuthController ..> AuthService : uses
 DomainController ..> DomainService : uses
+DomainController ..> CurriculumService : reads curriculum
 SessionLogController ..> SessionLogService : uses
 DashboardController ..> DashboardService : uses
 ProgressController ..> ProgressService : uses
 ProgressController ..> PersonalRecordService : uses
 TaskController ..> TaskService : uses
 TaskController ..> TaskGenerationService : uses
+TaskController ..> VideoFeedbackService : video feedback
 MilestoneController ..> MilestoneService : uses
 AiController ..> AiChatService : uses
 AiController ..> AiNudgeService : uses
@@ -1888,7 +2185,9 @@ TaskGenerationService ..> TaskRepository : uses
 TaskGenerationService ..> UserContextAssembler : uses
 TaskGenerationService ..> PromptBuilder : uses
 TaskGenerationService ..> GeminiClient : calls
+TaskGenerationService ..> CurriculumService : advance() for curriculum domains
 
 SessionLogService ..> TaskService : uses
+TaskService ..> CurriculumService : advance() on task DONE
 
 @enduml

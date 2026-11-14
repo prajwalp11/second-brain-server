@@ -18,4 +18,7 @@ public class GeneratedSystemResponse {
     private List<MetricDefinitionResponse> metrics;
     private List<MilestoneResponse> milestones;
     private List<TaskResponse> tasks;
+
+    /** Ordered course the server persists as curriculum_step rows (Stage 1). */
+    private List<GeneratedCurriculumStep> curriculum;
 }
