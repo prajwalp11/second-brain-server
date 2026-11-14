@@ -44,9 +44,26 @@ public class CurriculumService {
     private final TaskRepository taskRepository;
     private final VideoResolver videoResolver;
     private final VideoCacheRepository videoCacheRepository;
+    private final com.secondbrain.second_brain_server.repository.DomainRepository domainRepository;
     private final PromptBuilder promptBuilder;
     private final GeminiClient geminiClient;
     private final ObjectMapper objectMapper;
+
+    /**
+     * Fire-and-forget advance used right after a task is completed: runs in a background thread and
+     * its own transaction so the completing request returns immediately (the next task — which needs
+     * an AI call + video resolve — is created a moment later and shows up on the next refresh).
+     * Takes the domainId (not the entity) to stay safe across threads.
+     */
+    @org.springframework.scheduling.annotation.Async
+    @Transactional
+    public void advanceAsync(UUID domainId) {
+        try {
+            domainRepository.findById(domainId).ifPresent(this::advance);
+        } catch (Exception e) {
+            log.warn("Async curriculum advance failed for domain {}: {}", domainId, e.getMessage());
+        }
+    }
 
     /** Whether a domain is curriculum-backed (vs. the legacy flat-task fallback). */
     public boolean hasCurriculum(UUID domainId) {

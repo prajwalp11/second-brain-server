@@ -541,3 +541,60 @@ BEGIN
     END IF;
 END $$;
 CREATE INDEX IF NOT EXISTS idx_tasks_curriculum_step ON tasks(curriculum_step_id);
+
+-- ============================================================
+-- PUSH NOTIFICATIONS (Expo, outbox-based)
+-- ============================================================
+
+-- Per-type notification preferences as JSON text (null -> all enabled by default).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS push_prefs TEXT;
+
+-- One row per device. enabled=false on logout or when Expo reports DeviceNotRegistered.
+CREATE TABLE IF NOT EXISTS push_token (
+    id          UUID PRIMARY KEY,
+    user_id     UUID NOT NULL,
+    expo_token  VARCHAR(255) NOT NULL,
+    platform    VARCHAR(16) NOT NULL,          -- IOS | ANDROID
+    enabled     BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMP DEFAULT NOW(),
+    updated_at  TIMESTAMP DEFAULT NOW(),
+    CONSTRAINT fk_push_token_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT uq_push_token_expo UNIQUE (expo_token)
+);
+CREATE INDEX IF NOT EXISTS idx_push_token_user_enabled ON push_token(user_id, enabled);
+
+-- Outbox queue: PLANNER inserts PENDING rows; SENDER drains them to Expo.
+-- Guard: at most one PENDING row per (user, type). expires_at drops stale rows.
+CREATE TABLE IF NOT EXISTS push_outbox (
+    id          UUID PRIMARY KEY,
+    user_id     UUID NOT NULL,
+    type        VARCHAR(32) NOT NULL,          -- TASK_DUE | STREAK_AT_RISK | WEEKLY_INSIGHT
+    title       VARCHAR(255) NOT NULL,
+    body        VARCHAR(500) NOT NULL,
+    data        TEXT,                          -- JSON deep-link payload
+    status      VARCHAR(16) NOT NULL DEFAULT 'PENDING',   -- PENDING | SENT | FAILED
+    attempts    INT NOT NULL DEFAULT 0,
+    expires_at  TIMESTAMP,
+    created_at  TIMESTAMP DEFAULT NOW(),
+    updated_at  TIMESTAMP DEFAULT NOW(),
+    sent_at     TIMESTAMP,
+    CONSTRAINT fk_push_outbox_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_push_outbox_status ON push_outbox(status);
+CREATE INDEX IF NOT EXISTS idx_push_outbox_user_type_status ON push_outbox(user_id, type, status);
+
+-- Sent ledger: audit + source of truth for the per-type cooldown (latest sent_at per user+type).
+CREATE TABLE IF NOT EXISTS push_history (
+    id              UUID PRIMARY KEY,
+    user_id         UUID NOT NULL,
+    type            VARCHAR(32) NOT NULL,
+    title           VARCHAR(255),
+    body            VARCHAR(500),
+    data            TEXT,
+    status          VARCHAR(16) NOT NULL,      -- SENT | FAILED
+    expo_ticket_id  VARCHAR(255),
+    sent_at         TIMESTAMP DEFAULT NOW(),
+    read_at         TIMESTAMP,
+    CONSTRAINT fk_push_history_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_push_history_user_type_sent ON push_history(user_id, type, sent_at DESC);

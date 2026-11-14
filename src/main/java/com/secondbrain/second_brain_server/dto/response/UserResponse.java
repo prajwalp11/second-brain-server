@@ -14,4 +14,6 @@ public class UserResponse {
     private String firstName;
     private String lastName;
     private String email;
+    /** True for SSO (passwordless) accounts — the app hides the password field on delete. */
+    private boolean ssoUser;
 }

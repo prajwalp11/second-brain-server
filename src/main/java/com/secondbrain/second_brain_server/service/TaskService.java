@@ -107,12 +107,14 @@ public class TaskService {
 
         Task saved = taskRepository.save(task);
 
-        // If this was the last open task of a curriculum step, advance the course right away.
+        // If this was the last open task of a curriculum step, advance the course in the BACKGROUND
+        // so this request returns immediately — the next task (AI-shaped + video-resolved) appears
+        // on the next refresh rather than blocking the completion/log call.
         if (task.getCurriculumStepId() != null && task.getStatus() == TaskStatus.DONE) {
             try {
-                curriculumService.advance(task.getDomain());
+                curriculumService.advanceAsync(task.getDomain().getId());
             } catch (Exception e) {
-                log.warn("Curriculum advance after task {} failed: {}", taskId, e.getMessage());
+                log.warn("Curriculum advance after task {} failed to schedule: {}", taskId, e.getMessage());
             }
         }
 

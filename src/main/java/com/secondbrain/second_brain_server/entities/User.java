@@ -51,6 +51,10 @@ public class User {
     @Column(name = "ai_used_today")
     private Integer aiUsedToday;
 
+    /** Per-type push notification preferences as JSON (null = all enabled). Parsed by PushService. */
+    @Column(name = "push_prefs")
+    private String pushPrefs;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -114,6 +118,9 @@ public class User {
                 .firstName(this.firstName)
                 .lastName(this.lastName)
                 .email(this.email)
+                // Passwordless account = SSO (e.g. Google). The app uses this to drop the
+                // password field on account deletion.
+                .ssoUser(this.password == null)
                 .build();
     }
 }

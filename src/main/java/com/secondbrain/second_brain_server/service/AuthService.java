@@ -314,16 +314,20 @@ public class AuthService {
     /**
      * Permanently deletes the user's data (domains, logs, tasks, PRs, insights, AI conversations,
      * nudges) and soft-deletes the user row (is_deleted = TRUE, login blocked, email retained).
-     * Requires BOTH a valid OTP and the current password.
+     * Always requires a valid OTP. The current password is required ONLY for password accounts;
+     * SSO (passwordless) users are authorized by the emailed OTP alone.
      */
     @Transactional
     public void deleteAccount(UUID userId, String code, String password) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", userId));
 
-        // Verify current password first.
-        if (user.getPassword() == null || !passwordEncoder.matches(password, user.getPassword())) {
-            throw new ValidationException("Current password is incorrect.");
+        // Password accounts: verify the current password. SSO users have no password, so the OTP
+        // (proof the person controls the account email) is sufficient on its own.
+        if (user.getPassword() != null) {
+            if (password == null || !passwordEncoder.matches(password, user.getPassword())) {
+                throw new ValidationException("Current password is incorrect.");
+            }
         }
 
         // Then verify + consume the OTP.

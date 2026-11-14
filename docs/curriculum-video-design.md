@@ -495,3 +495,182 @@ DailyTaskGenerationScheduler ..> CurriculumService : advance() ; extend() when a
 - Depends on YouTube Data API quota; caching + cross-user reuse + lazy per-step resolution is the
   mitigation.
 ```
+
+
+---
+
+# Design: Push Notifications (Expo, outbox-based)
+
+## P1. Problem being solved
+The app computes things worth telling the user about (a task is due today, their streak is about to
+break, their weekly recap is ready) but has no way to reach them when the app is closed. We need
+reliable, non-spammy push to **both iOS and Android**, cheap to run, that reuses the signals the app
+already produces — without a confusingly-timed firehose of notifications.
+
+## P2. Core model & locked decisions
+- **Transport: Expo Push API** (`https://exp.host/--/api/v2/push/send`), NOT raw Firebase/APNs.
+  - One token type (`ExponentPushToken[...]`), one endpoint; Expo fans out to APNs + FCM.
+  - **Free for production** (no per-message cost, no volume cap). APNs key + FCM credentials live in
+    EAS, not in the server. This replaces the old `FirebasePushService` stub in the LLD.
+- **Outbox pattern (two jobs):** a PLANNER decides *who/what* and enqueues rows; a SENDER drains them
+  to Expo. Durable retry + clean separation of eligibility logic from delivery.
+- **v1 notification types (exactly three):**
+  - `TASK_DUE` — a task is due today (morning window).
+  - `STREAK_AT_RISK` — a training-day domain has no log yet (evening window).
+  - `WEEKLY_INSIGHT` — "how you did this week" (weekly).
+  - (Dropped from scope: CURRICULUM_UNLOCKED, MILESTONE_NEAR.)
+- **Per-type cooldown, configurable, default 12h:** each type is sent to a user at most once per its
+  cooldown window. Types are INDEPENDENT — a streak alert never suppresses a task reminder (this is
+  what avoids the "end-of-day notification gets blocked" failure of a global cooldown).
+- **One pending instance per (user, type):** the PLANNER never queues a second outbox row for a
+  (user, type) while one is still PENDING. Bounds the outbox (max 3 pending/user).
+- **Expiry:** each outbox row has `expires_at` (end of its relevant day for TASK_DUE/STREAK_AT_RISK).
+  The SENDER drops expired rows so a stale reminder never fires after it's useless.
+- **Preferences:** per-type on/off toggles stored as JSONB on `users` (`push_prefs`). No template
+  table, no preferences table (minimal).
+- **Table naming:** all new tables are prefixed `push_`.
+
+## P3. Data model (new)
+All SQL goes into the single existing `V1__create_initial_schema.sql` (idempotent, `IF NOT EXISTS`).
+
+### P3.1 `push_token` — one row per device
+```
+id              uuid pk
+user_id         uuid fk -> users(id) on delete cascade
+expo_token      text unique            -- ExponentPushToken[...]
+platform        varchar  -- IOS | ANDROID
+enabled         boolean default true   -- false when Expo returns DeviceNotRegistered or on logout
+created_at, updated_at timestamp
+```
+Upserted by `POST /api/push/token` on login/app-start; disabled on logout or invalid-token receipt.
+
+### P3.2 `push_outbox` — the queue ("instance table")
+```
+id              uuid pk
+user_id         uuid fk
+type            varchar  -- TASK_DUE | STREAK_AT_RISK | WEEKLY_INSIGHT
+title           text
+body            text
+data            jsonb     -- deep-link payload, e.g. {"route":"/(tabs)","domainId":...,"taskId":...}
+status          varchar default 'PENDING'  -- PENDING | SENT | FAILED
+attempts        int default 0
+expires_at      timestamp null
+created_at, updated_at, sent_at timestamp
+```
+Indexes: `(status)` for the SENDER drain; `(user_id, type, status)` for the pending-dedup check.
+
+### P3.3 `push_history` — sent ledger (audit + cooldown source of truth)
+```
+id              uuid pk
+user_id         uuid fk
+type            varchar
+title, body     text
+data            jsonb
+status          varchar   -- SENT | FAILED
+expo_ticket_id  text null
+sent_at         timestamp
+read_at         timestamp null   -- reserved for a future in-app notification center
+```
+The cooldown check reads the latest `sent_at` per (user, type) here.
+
+### P3.4 `users.push_prefs` (JSONB, nullable → defaults all-on)
+```
+{ "taskDue": true, "streakAtRisk": true, "weeklyInsight": true }
+```
+
+## P4. Jobs & logic
+Both jobs are `@Scheduled` components wrapped in `jobLogService.run(name, supplier)` (existing
+convention), so each run is audited in `job_execution_logs`.
+
+### P4.1 PLANNER — `PushPlannerScheduler`, every 5 min
+```
+for each active user that has >= 1 enabled push_token:
+  prefs = user.push_prefs (default all true)
+  for each candidate type the user is eligible for RIGHT NOW:
+     # eligibility per type:
+     #  TASK_DUE        : prefs.taskDue      & now in morning window & a task is due today (active domain)
+     #  STREAK_AT_RISK  : prefs.streakAtRisk & now in evening window  & training-day domain with no log today
+     #  WEEKLY_INSIGHT  : prefs.weeklyInsight& weekly window reached   & insight ready
+     if push_outbox has a PENDING row for (user, type):   continue   # one-pending-per-(user,type)
+     if cooldownActive(user, type, PUSH_COOLDOWN_<TYPE>_HOURS): continue  # per-type 12h via push_history
+     INSERT push_outbox(user, type, title, body, data, status=PENDING,
+                        expires_at = endOfRelevantDay(type))
+```
+No Expo call here. Copy (title/body) is built in code per type (like `EmailService`); dynamic parts
+(task title, domain name, insight summary) are interpolated.
+
+### P4.2 SENDER — `PushSenderScheduler`, every 1 min
+```
+rows = push_outbox.findByStatus(PENDING, limit N)
+for row in rows:
+  if row.expires_at != null && now > row.expires_at:
+       row.status = FAILED ; continue            # stale -> drop, never send
+  tokens = push_token.findEnabledByUser(row.user_id)
+  if tokens empty: row.status = FAILED ; continue
+  tickets = expoPushClient.send(batch of ExpoPushMessage(token, title, body, data, channelId))
+  row.status = SENT ; row.sent_at = now ; row.attempts++
+  push_history.insert(user, type, ..., status=SENT, ticketId)
+  on retryable failure: row.status = PENDING (left for next tick), attempts++, cap at MAX_ATTEMPTS -> FAILED
+  on DeviceNotRegistered receipt: push_token.enabled = false
+```
+Batches to Expo ≤100 messages/request. Receipts (Expo is async) are checked on a later pass to prune
+dead tokens (Stage 2 refinement; v1 may prune on the immediate ticket error).
+
+### P4.3 Why outbox (vs. single job)
+Separating decide-vs-send gives durable retry (a failed send leaves a PENDING row the SENDER retries),
+protects eligibility logic from Expo latency/outages, and makes the queue inspectable. The
+one-pending-per-(user,type) guard keeps it from bloating.
+
+## P5. Config (env)
+```
+push.enabled=${PUSH_ENABLED:true}
+push.cooldown.task-due-hours=${PUSH_COOLDOWN_TASK_DUE_HOURS:12}
+push.cooldown.streak-at-risk-hours=${PUSH_COOLDOWN_STREAK_AT_RISK_HOURS:12}
+push.cooldown.weekly-insight-hours=${PUSH_COOLDOWN_WEEKLY_INSIGHT_HOURS:144}  # ~weekly; cron governs cadence
+push.sender.batch-size=${PUSH_SENDER_BATCH:100}
+push.max-attempts=${PUSH_MAX_ATTEMPTS:5}
+# windows (server-local for v1; per-user timezone is Stage 2)
+push.window.morning=${PUSH_WINDOW_MORNING:08:00-10:00}
+push.window.evening=${PUSH_WINDOW_EVENING:18:00-21:00}
+```
+
+## P6. Server pieces (new)
+- Enums `PushType {TASK_DUE, STREAK_AT_RISK, WEEKLY_INSIGHT}`, `PushPlatform {IOS, ANDROID}`,
+  `PushStatus {PENDING, SENT, FAILED}`.
+- Entities/repos: `PushToken`, `PushOutbox`, `PushHistory`.
+- `external/ExpoPushClient` — POST to Expo, batched; `ExpoPushMessage`/`ExpoPushTicket` records.
+- `service/PushService` — `enqueue(...)` helpers + eligibility checks (cooldown, pending-dedup, prefs);
+  `dispatchPending()` for the SENDER; copy builders per type. Failures logged, never thrown.
+- `scheduler/PushPlannerScheduler` (5 min) + `scheduler/PushSenderScheduler` (1 min).
+- `controllers/PushTokenController` — `POST /api/push/token` (register/upsert),
+  `DELETE /api/push/token` (logout), `PUT /api/users/push-prefs` (toggles). `@CurrentUser`.
+
+## P7. App pieces (Expo)
+- Add `expo-notifications` + `app.json` plugin; Android notification channel(s) + icon/color; iOS
+  `aps-environment` (plugin handles). `expo-device` already present.
+- `services/push.ts` — request permission (post-login, not cold-launch), get Expo token,
+  `POST /api/push/token`; `DELETE` on logout; foreground notification handler; tap → `expo-router`
+  deep-link from `data.route`.
+- Android 13+ `POST_NOTIFICATIONS` runtime permission.
+- A small settings UI for the three per-type toggles → `PUT /api/users/push-prefs`.
+
+## P8. EAS / credentials (one-time, no code)
+- iOS: upload an **APNs key (.p8)** to the Expo project credentials.
+- Android: set **FCM v1** (Firebase project + service-account JSON) in Expo credentials.
+- Expo routes through these; the server only ever talks to the Expo Push API.
+
+## P9. Rollout stages
+- **Stage 1 (this):** 3 tables, 2 jobs (outbox), ExpoPushClient, token + prefs endpoints, app
+  registration + deep-link, the 3 notification types, per-type 12h cooldown, pending-dedup, expiry.
+- **Stage 2 (later):** async receipt reconciliation + token pruning; per-user timezone windows;
+  in-app notification center (`push_history.read_at`); quiet hours; more types (curriculum unlock,
+  milestone near); optional true outbox worker / queue if volume grows.
+
+## P10. Honest limitations
+- Send windows are **server-local** in v1 (not per-user timezone) — a user in another timezone may get
+  a "morning" push at an off hour until Stage 2 adds timezone handling.
+- Expo Push is a free relay but adds one hop; delivery is best-effort (same as any push). Receipts are
+  async — a token that died between send and receipt is pruned on the next pass, not instantly.
+- No read-tracking / notification center in v1 (`read_at` reserved).
+- Cooldown + one-pending guard can, by design, DROP a lower-priority notification on a busy day; this
+  is intentional anti-spam, accepted over delivering everything.

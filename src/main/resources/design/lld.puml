@@ -415,6 +415,67 @@ package "entities" {
     effectiveConfidence.
   end note
 
+  class PushToken {
+    - id : UUID <<PK>>
+    - userId : UUID <<FK>>
+    - expoToken : String <<unique>>
+    - platform : PushPlatform <<enum>>
+    - enabled : boolean
+    - createdAt : LocalDateTime
+    - updatedAt : LocalDateTime
+  }
+  note right of PushToken
+    One row per device (ExponentPushToken).
+    Upserted by POST /api/push/token on login;
+    enabled=false on logout or when Expo returns
+    DeviceNotRegistered for the token.
+  end note
+
+  class PushOutbox {
+    - id : UUID <<PK>>
+    - userId : UUID <<FK>>
+    - type : PushType <<enum>>
+    - title : String
+    - body : String
+    - data : String <<jsonb — deep-link payload>>
+    - status : PushStatus <<enum>>
+    - attempts : int
+    - expiresAt : LocalDateTime
+    - createdAt : LocalDateTime
+    - updatedAt : LocalDateTime
+    - sentAt : LocalDateTime
+  }
+  note right of PushOutbox
+    The queue ("instance" table). PLANNER inserts
+    PENDING rows; SENDER drains them to Expo.
+    Guard: at most ONE PENDING row per (user, type).
+    expiresAt = end of the notification's day — the
+    SENDER drops expired rows so a stale reminder
+    never fires. Retryable failure stays PENDING
+    (retried next tick) up to push.max-attempts.
+  end note
+
+  class PushHistory {
+    - id : UUID <<PK>>
+    - userId : UUID <<FK>>
+    - type : PushType <<enum>>
+    - title : String
+    - body : String
+    - data : String <<jsonb>>
+    - status : PushStatus <<enum>>
+    - expoTicketId : String
+    - sentAt : LocalDateTime
+    - readAt : LocalDateTime
+  }
+  note right of PushHistory
+    Sent ledger: audit + the source of truth for the
+    PER-TYPE cooldown (latest sentAt per user+type vs
+    push.cooldown.<type>-hours, default 12h; types are
+    independent so one never suppresses another).
+    readAt reserved for a future in-app notification
+    center.
+  end note
+
   
 
   
@@ -499,6 +560,20 @@ package "enums" {
     HIGH
     MEDIUM
     LOW
+  }
+  enum PushType {
+    TASK_DUE
+    STREAK_AT_RISK
+    WEEKLY_INSIGHT
+  }
+  enum PushPlatform {
+    IOS
+    ANDROID
+  }
+  enum PushStatus {
+    PENDING
+    SENT
+    FAILED
   }
 }
 
@@ -943,6 +1018,17 @@ package "repositories" {
     + findByQueryKeyAndUserId(queryKey: String, userId: UUID) : Optional<VideoFeedback>
     + countByQueryKeyAndHelpful(queryKey: String, helpful: boolean) : long
   }
+  interface PushTokenRepository {
+    + findByUserIdAndEnabledTrue(userId: UUID) : List<PushToken>
+    + findByExpoToken(expoToken: String) : Optional<PushToken>
+  }
+  interface PushOutboxRepository {
+    + findByStatusOrderByCreatedAtAsc(status: PushStatus, pageable: Pageable) : List<PushOutbox>
+    + existsByUserIdAndTypeAndStatus(userId: UUID, type: PushType, status: PushStatus) : boolean
+  }
+  interface PushHistoryRepository {
+    + findFirstByUserIdAndTypeOrderBySentAtDesc(userId: UUID, type: PushType) : Optional<PushHistory>
+  }
   
   
 }
@@ -1218,6 +1304,49 @@ package "services" {
     row (SUCCESS/FAILED). Log-write is in
     its own try/catch so a logging failure
     never crashes the job. SCHEDULER RUNS ONLY.
+  end note
+
+  class PushService {
+    - pushTokenRepository : PushTokenRepository
+    - pushOutboxRepository : PushOutboxRepository
+    - pushHistoryRepository : PushHistoryRepository
+    - expoPushClient : ExpoPushClient
+    - taskRepository : TaskRepository
+    - domainRepository : DomainRepository
+    - objectMapper : ObjectMapper
+    - cooldownHours : Map<PushType,Integer> <<@Value push.cooldown.*-hours>>
+    - batchSize : int <<@Value push.sender.batch-size:100>>
+    - maxAttempts : int <<@Value push.max-attempts:5>>
+    --
+    + registerToken(userId: UUID, expoToken: String, platform: PushPlatform) : void
+    + disableToken(userId: UUID, expoToken: String) : void
+    + updatePrefs(userId: UUID, prefs: PushPrefs) : void
+    + planForUser(userId: UUID) : int
+    + dispatchPending() : int
+    - eligible(userId: UUID, type: PushType) : boolean
+    - cooldownActive(userId: UUID, type: PushType) : boolean
+    - hasPending(userId: UUID, type: PushType) : boolean
+    - enqueue(userId: UUID, type: PushType, title: String, body: String, data: Map) : void
+    - buildCopy(userId: UUID, type: PushType) : PushDraft
+  }
+  note right of PushService
+    SINGLE cohesive push service (registration +
+    eligibility + enqueue + dispatch + per-type copy),
+    mirroring EmailService's fail-soft contract: all
+    send failures are logged, never thrown, so jobs and
+    auth/log flows are never broken.
+    planForUser(): PLANNER step — for each eligible type
+      (prefs on + time window + condition true) that is
+      NOT in cooldown and has NO PENDING row, insert ONE
+      PushOutbox(PENDING, expiresAt=endOfDay).
+    dispatchPending(): SENDER step — drain PENDING rows
+      (batch), drop expired, POST via ExpoPushClient,
+      mark SENT + write PushHistory, leave retryable
+      failures PENDING up to maxAttempts, disable tokens
+      on DeviceNotRegistered.
+    Reuses taskRepository / domainRepository for the
+    TASK_DUE and STREAK_AT_RISK conditions (no new query
+    logic duplicated).
   end note
 }
 
@@ -1512,11 +1641,32 @@ package "external" {
     + role : String
     + parts : List<Map<String, String>>
   }
-  class FirebasePushService {
-    - messaging : FirebaseMessaging
+  class ExpoPushClient {
+    - restTemplate : RestTemplate
+    - endpoint : String <<https://exp.host/--/api/v2/push/send>>
     --
-    + send(userId: UUID, title: String, body: String, data: Map<String, String>) : void
-    - getDeviceTokens(userId: UUID) : List<String>
+    + send(messages: List<ExpoPushMessage>) : List<ExpoPushTicket>
+  }
+  note right of ExpoPushClient
+    Thin client for Expo's free Push API (routes to
+    APNs + FCM — no Firebase Admin SDK / APNs certs in
+    the server; EAS holds those credentials). Batches
+    <=100 messages/request. Tickets returned per message;
+    a "DeviceNotRegistered" error marks that push_token
+    disabled. Chosen over raw Firebase for the Expo/EAS
+    stack. Failures logged, never break the caller.
+  end note
+  class ExpoPushMessage {
+    + to : String <<ExponentPushToken>>
+    + title : String
+    + body : String
+    + data : Map<String, Object>
+    + channelId : String
+  }
+  class ExpoPushTicket {
+    + id : String
+    + status : String <<ok|error>>
+    + errorCode : String
   }
   class GoogleTokenVerifier {
     - clientIds : String <<@Value google.sso.client-id — comma-separated accepted audiences>>
@@ -1681,6 +1831,20 @@ package "controllers" {
     changes password (requires currentPassword
     + newPassword, current verified via encoder).
     Handled by AuthService.updateProfile.
+  end note
+  class PushController {
+    - pushService : PushService
+    --
+    + registerToken(request: RegisterPushTokenRequest) : ResponseEntity<Void>
+    + deleteToken(request: DeletePushTokenRequest) : ResponseEntity<Void>
+    + updatePrefs(request: PushPrefsRequest) : ResponseEntity<Void>
+  }
+  note right of PushController
+    Separate, thin controller (clean/modular).
+    POST   /api/push/token   register/upsert device
+    DELETE /api/push/token   logout / unregister
+    PUT    /api/push/prefs   per-type on/off toggles
+    userId via @CurrentUser; all delegate to PushService.
   end note
   note right of AuthController
     All controllers resolve userId
@@ -1908,6 +2072,48 @@ package "scheduler" {
     OTP tokens (all purposes) + revoked/expired refresh
     tokens so those tables stay bounded. Wrapped in JobLogService.
   end note
+  class PushPlannerScheduler {
+    - userRepository : UserRepository
+    - pushService : PushService
+    - jobLogService : JobLogService
+    --
+    + plan() : void
+  }
+  note right of PushPlannerScheduler
+    Every 5 min. For each user, calls
+    pushService.planForUser(userId): enqueues at most
+    one PushOutbox(PENDING) per eligible type (prefs +
+    time window + condition), skipping types in cooldown
+    or with a PENDING row. Decides WHO/WHAT only — no
+    Expo call. Wrapped in JobLogService.
+  end note
+  class PushSenderScheduler {
+    - pushService : PushService
+    - jobLogService : JobLogService
+    --
+    + send() : void
+  }
+  note right of PushSenderScheduler
+    Every 1 min. Calls pushService.dispatchPending():
+    drains PENDING outbox rows in batches, drops expired,
+    POSTs to Expo, marks SENT + writes PushHistory,
+    retries retryable failures (left PENDING up to
+    maxAttempts), disables dead tokens. Wrapped in
+    JobLogService.
+  end note
+  class WeeklyInsightPushScheduler {
+    - userRepository : UserRepository
+    - pushService : PushService
+    - jobLogService : JobLogService
+    --
+    + sendWeeklyInsights() : void
+  }
+  note right of WeeklyInsightPushScheduler
+    Sunday 6 PM. One WEEKLY_INSIGHT push per USER (not
+    per domain) via pushService.enqueueWeeklyInsight();
+    deep-links to the Progress tab. Insight data is
+    already cached daily by InsightsRefreshScheduler.
+  end note
   note bottom of scheduler
     All schedulers wrapped with
     JobLogService.run(name, task) which
@@ -1916,7 +2122,9 @@ package "scheduler" {
     for auditing.
     Active: DailyNudge (midnight),
     StreakCheck (midnight), AiLimitReset
-    (midnight), DailyTaskGeneration (5 AM).
+    (midnight), DailyTaskGeneration (5 AM),
+    PushPlanner (every 5 min), PushSender (every 1 min),
+    WeeklyInsightPush (Sun 6 PM).
   end note
 }
 
@@ -2189,5 +2397,26 @@ TaskGenerationService ..> CurriculumService : advance() for curriculum domains
 
 SessionLogService ..> TaskService : uses
 TaskService ..> CurriculumService : advance() on task DONE
+
+' ============================================================
+' PUSH NOTIFICATIONS
+' ============================================================
+User "1" --> "many" PushToken : devices
+User "1" --> "many" PushHistory : received
+
+PushService ..> PushTokenRepository : uses
+PushService ..> PushOutboxRepository : enqueue/drain
+PushService ..> PushHistoryRepository : cooldown + ledger
+PushService ..> ExpoPushClient : sends
+PushService ..> TaskRepository : TASK_DUE condition
+PushService ..> DomainRepository : STREAK_AT_RISK condition
+
+PushController ..> PushService : uses
+
+PushPlannerScheduler ..> UserRepository : uses
+PushPlannerScheduler ..> PushService : planForUser()
+PushSenderScheduler ..> PushService : dispatchPending()
+WeeklyInsightPushScheduler ..> UserRepository : uses
+WeeklyInsightPushScheduler ..> PushService : enqueueWeeklyInsight()
 
 @enduml
