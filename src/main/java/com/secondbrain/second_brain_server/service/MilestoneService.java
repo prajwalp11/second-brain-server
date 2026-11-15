@@ -11,6 +11,9 @@ import com.secondbrain.second_brain_server.exception.ForbiddenException;
 import com.secondbrain.second_brain_server.exception.ResourceNotFoundException;
 import com.secondbrain.second_brain_server.repository.DomainMetricDefinitionRepository;
 import com.secondbrain.second_brain_server.repository.MilestoneRepository;
+import com.secondbrain.second_brain_server.repository.CurriculumStepRepository;
+import com.secondbrain.second_brain_server.enums.StepStatus;
+import com.secondbrain.second_brain_server.entities.CurriculumStep;
 import com.secondbrain.second_brain_server.service.ai.AiSystemGeneratorService;
 import com.secondbrain.second_brain_server.repository.PersonalRecordRepository;
 import com.secondbrain.second_brain_server.repository.SessionMetricValueRepository;
@@ -36,6 +39,7 @@ public class MilestoneService {
     private final DomainService domainService;
     private final DomainMetricDefinitionRepository metricDefinitionRepository;
     private final AiSystemGeneratorService aiSystemGeneratorService;
+    private final CurriculumStepRepository curriculumStepRepository;
 
     @Transactional
     public MilestoneResponse createMilestone(UUID userId, CreateMilestoneRequest request) {
@@ -127,21 +131,43 @@ public class MilestoneService {
             return false;
         }
 
-        Milestone lastCompleted = done.stream()
-                .max((a, b) -> {
+        // Full completed history, oldest -> newest, so the AI sees the whole progression.
+        List<Milestone> history = done.stream()
+                .sorted((a, b) -> {
                     LocalDateTime ca = a.getCompletedAt() != null ? a.getCompletedAt() : a.getCreatedAt();
                     LocalDateTime cb = b.getCompletedAt() != null ? b.getCompletedAt() : b.getCreatedAt();
                     return ca.compareTo(cb);
                 })
-                .orElse(null);
+                .collect(Collectors.toList());
 
         List<DomainMetricDefinition> metrics =
                 metricDefinitionRepository.findByDomainIdOrderByDisplayOrder(domain.getId());
 
-        MilestoneResponse generated = aiSystemGeneratorService.generateNextMilestone(domain, metrics, lastCompleted);
+        // Current best per metric (direction-aware: max for higher-better, min for lower-better),
+        // so the AI raises the bar past what the user has ALREADY achieved.
+        java.util.Map<String, Double> currentValues = new java.util.LinkedHashMap<>();
+        for (DomainMetricDefinition m : metrics) {
+            java.util.Optional<Double> best = m.isHigherBetter()
+                    ? sessionMetricValueRepository.findMaxValueForMetric(domain.getId(), m.getMetricKey())
+                    : sessionMetricValueRepository.findMinValueForMetric(domain.getId(), m.getMetricKey());
+            best.ifPresent(v -> currentValues.put(m.getMetricKey(), v));
+        }
+
+        // Curriculum context (steering only): the user's current step, if the domain is curriculum-backed.
+        CurriculumStep currentStep = curriculumStepRepository
+                .findFirstByDomainIdAndStatus(domain.getId(), StepStatus.CURRENT)
+                .orElse(null);
+
+        MilestoneResponse generated = aiSystemGeneratorService.generateNextMilestone(
+                domain, metrics, history, currentValues, currentStep);
         if (generated == null || generated.getMetricKey() == null || generated.getTargetValue() == null) {
             return false; // AI failed or returned unusable data — skip, try again next run
         }
+
+        boolean higherBetter = metricDefinitionRepository
+                .findByDomainIdAndMetricKey(domain.getId(), generated.getMetricKey())
+                .map(DomainMetricDefinition::isHigherBetter)
+                .orElse(true);
 
         Milestone next = Milestone.builder()
                 .domain(domain)
@@ -149,6 +175,7 @@ public class MilestoneService {
                 .metricKey(generated.getMetricKey())
                 .targetValue(generated.getTargetValue())
                 .unit(generated.getUnit())
+                .higherBetter(higherBetter)
                 .status(MilestoneStatus.UPCOMING)
                 .deadline(generated.getDeadline())
                 .aiGenerated(true)

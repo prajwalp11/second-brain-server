@@ -60,9 +60,11 @@ public class AiSystemGeneratorService {
     public MilestoneResponse generateNextMilestone(
             Domain domain,
             List<DomainMetricDefinition> metrics,
-            Milestone lastCompleted) {
+            List<Milestone> completedHistory,
+            java.util.Map<String, Double> currentValues,
+            com.secondbrain.second_brain_server.entities.CurriculumStep currentStep) {
         try {
-            String prompt = promptBuilder.nextMilestone(domain, metrics, lastCompleted);
+            String prompt = promptBuilder.nextMilestone(domain, metrics, completedHistory, currentValues, currentStep);
             List<GeminiMessage> messages = List.of(new GeminiMessage("user", List.of(Map.of("text", "Generate the next milestone now."))));
             String rawResponse = geminiClient.completeWithJson(prompt, messages);
             return objectMapper.readValue(rawResponse, MilestoneResponse.class);

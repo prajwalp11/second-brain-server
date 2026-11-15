@@ -384,7 +384,13 @@ public class PromptBuilder {
      * active milestones are all complete. Feeds the domain's metrics and the most
      * recently completed milestone so the AI can raise the bar sensibly.
      */
-    public String nextMilestone(Domain domain, List<DomainMetricDefinition> metrics, Milestone lastCompleted) {
+    public String nextMilestone(Domain domain, List<DomainMetricDefinition> metrics,
+                                List<Milestone> completedHistory,
+                                java.util.Map<String, Double> currentValues,
+                                CurriculumStep currentStep) {
+        Milestone lastCompleted = (completedHistory != null && !completedHistory.isEmpty())
+                ? completedHistory.get(completedHistory.size() - 1)
+                : null;
         LocalDate today = LocalDate.now();
         StringBuilder prompt = new StringBuilder();
         prompt.append("You are an expert coach for a personal growth app called 'Second Brain'.\n");
@@ -410,6 +416,35 @@ public class PromptBuilder {
             prompt.append("  (none defined)\n");
         }
         prompt.append("\n");
+
+        // Current actual bests so the target is harder than what they've ALREADY achieved
+        // (not just harder than the last milestone's target).
+        if (currentValues != null && !currentValues.isEmpty()) {
+            prompt.append("User's current best/most-recent values (raise the bar beyond these):\n");
+            currentValues.forEach((k, v) -> prompt.append("  - ").append(k).append(" = ").append(v).append("\n"));
+            prompt.append("\n");
+        }
+
+        // Full completed-milestone history so the AI paces the next target to the user's trajectory
+        // and does NOT repeat an earlier goal.
+        if (completedHistory != null && !completedHistory.isEmpty()) {
+            prompt.append("Completed milestones so far (oldest to newest — continue the progression, do NOT repeat any):\n");
+            for (Milestone m : completedHistory) {
+                prompt.append("  - ").append(m.getLabel())
+                        .append(" [").append(m.getMetricKey()).append(" ").append(m.getTargetValue())
+                        .append(m.getUnit() != null ? (" " + m.getUnit()) : "").append("]\n");
+            }
+            prompt.append("\n");
+        }
+
+        // Curriculum context (steering only — the milestone stays metric-based, but should fit where
+        // the user currently is in their learning path).
+        if (currentStep != null) {
+            prompt.append("The user is currently working on this part of their curriculum: ")
+                    .append(currentStep.getPhase() != null ? ("[" + currentStep.getPhase() + "] ") : "")
+                    .append(currentStep.getTitle() != null ? currentStep.getTitle() : "")
+                    .append("\nPrefer a milestone that fits this current focus where it makes sense (as context, not a hard rule).\n\n");
+        }
 
         if (lastCompleted != null) {
             prompt.append("Most recently completed milestone (make the new target harder than this):\n");
