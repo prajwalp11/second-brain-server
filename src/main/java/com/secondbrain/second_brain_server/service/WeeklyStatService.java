@@ -64,18 +64,28 @@ public class WeeklyStatService {
     }
 
     /**
-     * Bounded/score metrics (those with a defined maxValue, e.g. a 0-100 technique score) are
-     * AVERAGED over the week and clamped to their [min, max] range, so they never exceed the cap.
-     * Unbounded cumulative metrics (minutes practiced, pages read, reps) are SUMMED.
+     * How a metric is summarized over the week, driven ONLY by its flags (domain-agnostic):
+     * - Bounded/score metrics (maxValue set, e.g. a 0-100 score): AVERAGED + clamped.
+     * - Higher-is-better open-ended (distance, reps, minutes): SUMMED (a weekly total makes sense).
+     * - Lower-is-better open-ended (time, pace, SWOLF): AVERAGED — summing per-session times is
+     *   meaningless; the weekly average reflects typical performance. (Best-ever is tracked by PRs.)
      */
     private Double aggregateMetric(UUID domainId, DomainMetricDefinition metric, LocalDate from, LocalDate to) {
         String metricKey = metric.getMetricKey();
+
         if (metric.getMaxValue() != null) {
             Double avg = sessionMetricValueRepository.avgMetricForPeriod(domainId, metricKey, from, to).orElse(0.0);
             double min = metric.getMinValue() != null ? metric.getMinValue() : 0.0;
             double max = metric.getMaxValue();
             return Math.max(min, Math.min(max, avg));
         }
+
+        if (!metric.isHigherBetter()) {
+            // Lower-is-better, open-ended: weekly average (summing times/SWOLF is nonsense).
+            return sessionMetricValueRepository.avgMetricForPeriod(domainId, metricKey, from, to).orElse(0.0);
+        }
+
+        // Higher-is-better, open-ended cumulative quantity: sum.
         return sessionMetricValueRepository.sumMetricForPeriod(domainId, metricKey, from, to).orElse(0.0);
     }
 

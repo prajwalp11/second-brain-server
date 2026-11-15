@@ -24,6 +24,9 @@ public interface SessionMetricValueRepository extends JpaRepository<SessionMetri
     @Query("SELECT MAX(smv.numericValue) FROM SessionMetricValue smv JOIN smv.sessionLog sl WHERE sl.domain.id = :domainId AND smv.metricKey = :metricKey")
     Optional<Double> findMaxValueForMetric(UUID domainId, String metricKey);
 
+    @Query("SELECT MIN(smv.numericValue) FROM SessionMetricValue smv JOIN smv.sessionLog sl WHERE sl.domain.id = :domainId AND smv.metricKey = :metricKey")
+    Optional<Double> findMinValueForMetric(UUID domainId, String metricKey);
+
     @Query("SELECT SUM(smv.numericValue) FROM SessionMetricValue smv JOIN smv.sessionLog sl " +
             "WHERE sl.domain.id = :domainId AND smv.metricKey = :metricKey " +
             "AND sl.logDate BETWEEN :from AND :to")

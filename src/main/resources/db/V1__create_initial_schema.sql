@@ -598,3 +598,7 @@ CREATE TABLE IF NOT EXISTS push_history (
     CONSTRAINT fk_push_history_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_push_history_user_type_sent ON push_history(user_id, type, sent_at DESC);
+
+-- MILESTONES — direction flag so lower-is-better targets (e.g. a faster time) complete + render
+-- correctly. Defaults TRUE (higher-is-better) to match existing rows.
+ALTER TABLE milestones ADD COLUMN IF NOT EXISTS higher_better BOOLEAN NOT NULL DEFAULT TRUE;

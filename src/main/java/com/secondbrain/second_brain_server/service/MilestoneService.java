@@ -87,9 +87,16 @@ public class MilestoneService {
     public void updateProgress(UUID domainId) {
         List<Milestone> milestones = milestoneRepository.findByDomainId(domainId);
         for (Milestone milestone : milestones) {
-            Double currentValue = resolveCurrentValue(milestone);
+            // Resolve the metric's direction once; drives current-value, completion, and the bar.
+            boolean higherBetter = metricDefinitionRepository
+                    .findByDomainIdAndMetricKey(domainId, milestone.getMetricKey())
+                    .map(DomainMetricDefinition::isHigherBetter)
+                    .orElse(true);
+            milestone.setHigherBetter(higherBetter);
+
+            Double currentValue = resolveCurrentValue(milestone, higherBetter);
             milestone.setCurrentValue(currentValue);
-            checkAndComplete(milestone);
+            checkAndComplete(milestone, higherBetter);
             milestoneRepository.save(milestone);
         }
     }
@@ -159,7 +166,7 @@ public class MilestoneService {
                 .map(Milestone::toResponse);
     }
 
-    private Double resolveCurrentValue(Milestone milestone) {
+    private Double resolveCurrentValue(Milestone milestone, boolean higherBetter) {
         boolean isPrMetric = metricDefinitionRepository.findByDomainIdAndMetricKey(milestone.getDomain().getId(), milestone.getMetricKey())
                 .map(DomainMetricDefinition::isPR)
                 .orElse(false);
@@ -168,15 +175,25 @@ public class MilestoneService {
             return prRepository.findByDomainIdAndMetricKey(milestone.getDomain().getId(), milestone.getMetricKey())
                     .map(pr -> pr.getValue())
                     .orElse(0.0);
-        } else {
+        }
+        // Best achieved so far: the MAX for higher-is-better, the MIN for lower-is-better
+        // (e.g. the fastest time / lowest SWOLF). Domain-agnostic — only the direction flag matters.
+        if (higherBetter) {
             return sessionMetricValueRepository.findMaxValueForMetric(milestone.getDomain().getId(), milestone.getMetricKey())
                     .orElse(0.0);
         }
+        return sessionMetricValueRepository.findMinValueForMetric(milestone.getDomain().getId(), milestone.getMetricKey())
+                .orElse(null);
     }
 
-    private boolean checkAndComplete(Milestone milestone) {
-        if (milestone.getStatus() != MilestoneStatus.DONE && milestone.getCurrentValue() != null && milestone.getTargetValue() != null) {
-            if (milestone.getCurrentValue() >= milestone.getTargetValue()) {
+    private boolean checkAndComplete(Milestone milestone, boolean higherBetter) {
+        if (milestone.getStatus() != MilestoneStatus.DONE
+                && milestone.getCurrentValue() != null && milestone.getTargetValue() != null) {
+            // Higher-is-better completes when current >= target; lower-is-better when current <= target.
+            boolean reached = higherBetter
+                    ? milestone.getCurrentValue() >= milestone.getTargetValue()
+                    : milestone.getCurrentValue() <= milestone.getTargetValue();
+            if (reached) {
                 milestone.setStatus(MilestoneStatus.DONE);
                 milestone.setCompletedAt(milestone.getDomain().getLastLogDate() != null ? milestone.getDomain().getLastLogDate().atStartOfDay() : LocalDateTime.now());
                 return true;
