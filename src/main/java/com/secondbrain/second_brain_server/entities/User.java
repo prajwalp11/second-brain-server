@@ -55,6 +55,10 @@ public class User {
     @Column(name = "push_prefs")
     private String pushPrefs;
 
+    /** User's IANA timezone (e.g. "Asia/Kolkata"); null -> app-default zone. Set by the app. */
+    @Column(name = "timezone")
+    private String timezone;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 

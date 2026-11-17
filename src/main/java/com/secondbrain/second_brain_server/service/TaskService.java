@@ -11,6 +11,7 @@ import com.secondbrain.second_brain_server.exception.ForbiddenException;
 import com.secondbrain.second_brain_server.exception.ResourceNotFoundException;
 import com.secondbrain.second_brain_server.repository.DomainRepository;
 import com.secondbrain.second_brain_server.repository.TaskRepository;
+import com.secondbrain.second_brain_server.repository.UserRepository;
 import com.secondbrain.second_brain_server.external.YouTubeService;
 import com.secondbrain.second_brain_server.service.ai.CurriculumService;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,8 @@ public class TaskService {
     private final DomainService domainService;
     private final YouTubeService youTubeService;
     private final CurriculumService curriculumService;
+    private final UserRepository userRepository;
+    private final ClockService clockService;
 
     @Transactional
     public TaskResponse createTask(UUID userId, CreateTaskRequest request) {
@@ -72,7 +75,8 @@ public class TaskService {
     }
 
     public List<TaskResponse> getUpcomingTasks(UUID userId) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = clockService.today(
+                userRepository.findById(userId).orElse(null));
         LocalDate thirtyDaysFromNow = today.plusDays(30);
         return taskRepository.findByUserIdAndDueDateBetweenAndStatusIn(userId, today, thirtyDaysFromNow, List.of(TaskStatus.TODO, TaskStatus.IN_PROGRESS))
                 .stream()

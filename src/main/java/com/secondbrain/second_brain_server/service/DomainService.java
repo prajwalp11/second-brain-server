@@ -58,6 +58,7 @@ public class DomainService {
     private final AiSystemGeneratorService aiSystemGeneratorService;
     private final YouTubeService youTubeService;
     private final CurriculumService curriculumService;
+    private final ClockService clockService;
 
     public List<DomainResponse> getDomainsForUser(UUID userId) {
         return domainRepository.findByUserId(userId).stream()
@@ -187,7 +188,7 @@ public class DomainService {
         }
         java.util.Collections.sort(logDates);
 
-        Integer currentStreak = StreakCalculator.compute(logDates, domain.getWeeklySchedule(), LocalDate.now());
+        Integer currentStreak = StreakCalculator.compute(logDates, domain.getWeeklySchedule(), clockService.today(domain.getUser()));
         domain.setCurrentStreak(currentStreak);
         if (currentStreak > domain.getLongestStreak()) {
             domain.setLongestStreak(currentStreak);
@@ -208,7 +209,7 @@ public class DomainService {
             List<LocalDate> logDates = sessionLogRepository.findLogDatesByDomainId(domain.getId());
             java.util.Collections.sort(logDates);
 
-            Integer currentStreak = StreakCalculator.compute(logDates, domain.getWeeklySchedule(), LocalDate.now());
+            Integer currentStreak = StreakCalculator.compute(logDates, domain.getWeeklySchedule(), clockService.today(domain.getUser()));
             domain.setCurrentStreak(currentStreak);
             if (currentStreak > domain.getLongestStreak()) {
                 domain.setLongestStreak(currentStreak);
@@ -349,8 +350,8 @@ public class DomainService {
 
     @Transactional(readOnly = true)
     public List<TimeSeriesPointResponse> getChartData(UUID domainId, UUID userId, int days) {
-        assertOwnership(domainId, userId);
-        LocalDate endDate = LocalDate.now();
+        Domain domain = assertOwnership(domainId, userId);
+        LocalDate endDate = clockService.today(domain.getUser());
         LocalDate startDate = endDate.minusDays(days - 1);
 
         List<SessionLog> logs = sessionLogRepository.findByDomainIdAndLogDateBetweenWithMetrics(domainId, startDate, endDate);

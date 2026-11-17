@@ -25,4 +25,7 @@ public class UpdateProfileRequest {
 
     @Size(min = 8, message = "New password must be at least 8 characters")
     private String newPassword;
+
+    /** Optional IANA timezone (e.g. "Asia/Kolkata") the app reports from the device. */
+    private String timezone;
 }

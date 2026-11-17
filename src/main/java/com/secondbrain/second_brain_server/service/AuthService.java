@@ -206,6 +206,17 @@ public class AuthService {
             user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         }
 
+        // Timezone: accept a valid IANA zone id the app reports; ignore junk so a bad value
+        // never corrupts date logic (null/unknown => server uses the app-default zone).
+        if (request.getTimezone() != null && !request.getTimezone().isBlank()) {
+            String tz = request.getTimezone().trim();
+            if (java.time.ZoneId.getAvailableZoneIds().contains(tz)) {
+                user.setTimezone(tz);
+            } else {
+                log.warn("Ignoring invalid timezone '{}' for user {}", tz, userId);
+            }
+        }
+
         user.setUpdatedAt(LocalDateTime.now());
         return userRepository.save(user).toResponse();
     }

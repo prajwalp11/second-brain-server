@@ -11,6 +11,7 @@ import com.secondbrain.second_brain_server.exception.ForbiddenException;
 import com.secondbrain.second_brain_server.exception.ResourceNotFoundException;
 import com.secondbrain.second_brain_server.external.GeminiClient;
 import com.secondbrain.second_brain_server.external.GeminiMessage;
+import com.secondbrain.second_brain_server.service.ClockService;
 import com.secondbrain.second_brain_server.repository.AiNudgeRepository;
 import com.secondbrain.second_brain_server.repository.DomainRepository;
 import com.secondbrain.second_brain_server.repository.SessionLogRepository;
@@ -42,14 +43,14 @@ public class AiNudgeService {
     private final DomainRepository domainRepository;
     private final SessionLogRepository sessionLogRepository;
     private final StreakService streakService;
+    private final ClockService clockService;
 
     @Transactional
     public void generateNudgesForAllDomains(UUID userId) {
         List<Domain> domains = domainRepository.findByUserId(userId);
-        LocalDate today = LocalDate.now();
 
         for (Domain domain : domains) {
-            if (alreadySentToday(userId, domain.getId())) {
+            if (alreadySentToday(domain)) {
                 log.debug("Nudge already sent for domain {} today. Skipping.", domain.getId());
                 continue;
             }
@@ -101,7 +102,7 @@ public class AiNudgeService {
 
     private Optional<NudgeType> evaluateNudgeType(Domain domain, List<SessionLog> recentLogs) {
         // Simplified logic for prototype. More complex rules would go here.
-        LocalDate today = LocalDate.now();
+        LocalDate today = clockService.today(domain.getUser());
 
         // MISSING_LOG: If domain is active and last log date is more than 2 days ago
         if (domain.getStatus() == DomainStatus.ACTIVE
@@ -125,8 +126,9 @@ public class AiNudgeService {
         return Optional.empty();
     }
 
-    private boolean alreadySentToday(UUID userId, UUID domainId) {
-        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
-        return aiNudgeRepository.existsByUserIdAndDomainIdAndGeneratedAtAfter(userId, domainId, startOfDay);
+    private boolean alreadySentToday(Domain domain) {
+        LocalDateTime startOfDay = clockService.today(domain.getUser()).atStartOfDay();
+        return aiNudgeRepository.existsByUserIdAndDomainIdAndGeneratedAtAfter(
+                domain.getUser().getId(), domain.getId(), startOfDay);
     }
 }

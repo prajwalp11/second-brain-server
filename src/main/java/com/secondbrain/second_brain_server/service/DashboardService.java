@@ -38,12 +38,16 @@ public class DashboardService {
     private final WeeklyStatService weeklyStatService;
     private final AiNudgeService aiNudgeService;
     private final UserRepository userRepository;
+    private final ClockService clockService;
 
-    public DashboardResponse getDashboard(UUID userId, LocalDate date) {
+    public DashboardResponse getDashboard(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", userId));
 
-        String greeting = buildGreeting(user.getFirstName(), date);
+        // "Today" and the week window are the USER's local day (their timezone), not the server's.
+        LocalDate date = clockService.today(user);
+
+        String greeting = buildGreeting(user.getFirstName(), clockService.nowTime(user));
 
         // Only active domains
         List<Domain> activeDomains = domainRepository.findByUserIdAndStatus(userId, DomainStatus.ACTIVE);
@@ -81,8 +85,7 @@ public class DashboardService {
                 .build();
     }
 
-    private String buildGreeting(String name, LocalDate date) {
-        LocalTime now = LocalTime.now();
+    private String buildGreeting(String name, LocalTime now) {
         String timeOfDay;
         if (now.isBefore(LocalTime.NOON)) {
             timeOfDay = "Good morning";

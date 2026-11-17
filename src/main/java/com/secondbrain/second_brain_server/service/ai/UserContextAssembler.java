@@ -46,6 +46,7 @@ public class UserContextAssembler {
     private final TaskRepository taskRepository;
     private final UserRepository userRepository;
     private final WeeklyStatService weeklyStatService;
+    private final com.secondbrain.second_brain_server.service.ClockService clockService;
 
     public UserContext assemble(UUID userId) {
         // Domains
@@ -109,17 +110,16 @@ public class UserContextAssembler {
                 .lastLogDate(domain.getLastLogDate() != null ? domain.getLastLogDate().atStartOfDay() : null)
                 .build()));
 
-        // Weekly stats for current week
-        LocalDate weekStart = DateUtil.getWeekStart(LocalDate.now());
+        // Weekly stats for current week (user's local week).
+        User ctxUser = userRepository.findById(userId).orElse(null);
+        LocalDate weekStart = clockService.weekStart(ctxUser);
         List<WeeklyStatResponse> weeklyStats = new ArrayList<>();
         for (Domain domain : domains) {
             weeklyStats.addAll(weeklyStatService.getWeeklyStatsForDomain(domain, weekStart));
         }
 
         // User name for prompt personalisation
-        String userName = userRepository.findById(userId)
-                .map(User::getFirstName)
-                .orElse("User");
+        String userName = ctxUser != null ? ctxUser.getFirstName() : "User";
 
         return UserContext.builder()
                 .userId(userId)

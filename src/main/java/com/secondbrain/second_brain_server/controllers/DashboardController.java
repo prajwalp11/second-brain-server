@@ -28,7 +28,7 @@ public class DashboardController {
 
     @GetMapping
     public ResponseEntity<DashboardResponse> getDashboard(@CurrentUser UUID userId) {
-        return ResponseEntity.ok(dashboardService.getDashboard(userId, LocalDate.now()));
+        return ResponseEntity.ok(dashboardService.getDashboard(userId));
     }
 
     @GetMapping("/weekly-snapshot")

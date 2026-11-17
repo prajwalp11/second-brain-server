@@ -25,13 +25,14 @@ public class StreakService {
 
     private final DomainRepository domainRepository;
     private final SessionLogRepository sessionLogRepository;
+    private final ClockService clockService;
 
     @Transactional
     public void recalculateStreak(Domain domain) {
         List<LocalDate> logDates = sessionLogRepository.findLogDatesByDomainId(domain.getId());
         Collections.sort(logDates);
 
-        LocalDate today = LocalDate.now();
+        LocalDate today = clockService.today(domain.getUser());
         Integer currentStreak = StreakCalculator.compute(logDates, domain.getWeeklySchedule(), today);
 
         domain.setCurrentStreak(currentStreak);
@@ -41,12 +42,12 @@ public class StreakService {
         domainRepository.save(domain);
     }
 
+    @Transactional(readOnly = true)
     public List<Domain> getStreakAtRiskDomains(UUID userId) {
-        LocalDate today = LocalDate.now();
-        LocalDate yesterday = today.minusDays(1);
-
         return domainRepository.findByUserIdAndStatus(userId, DomainStatus.ACTIVE).stream()
                 .filter(domain -> {
+                    LocalDate today = clockService.today(domain.getUser());
+                    LocalDate yesterday = today.minusDays(1);
                     if (domain.getLastLogDate() != null && domain.getLastLogDate().isEqual(yesterday)) {
                         boolean isScheduledToday = DateUtil.isScheduledDay(domain.getWeeklySchedule(), today);
                         if (isScheduledToday) {

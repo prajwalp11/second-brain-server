@@ -44,6 +44,7 @@ public class PushService {
     private final TaskRepository taskRepository;
     private final SessionLogRepository sessionLogRepository;
     private final ObjectMapper objectMapper;
+    private final ClockService clockService;
 
     @Value("${push.cooldown.task-due-hours:12}")
     private int cooldownTaskDueHours;
@@ -111,7 +112,7 @@ public class PushService {
         PushPrefs prefs = parsePrefs(user.getPushPrefs());
 
         int queued = 0;
-        LocalTime now = LocalTime.now();
+        LocalTime now = clockService.nowTime(user);
 
         if (prefs.isTaskDue() && inWindow(now, morningWindow)) {
             queued += planTaskDue(user);
@@ -125,7 +126,7 @@ public class PushService {
 
     private int planTaskDue(User user) {
         if (blocked(user.getId(), PushType.TASK_DUE)) return 0;
-        LocalDate today = LocalDate.now();
+        LocalDate today = clockService.today(user);
         List<Task> dueToday = taskRepository
                 .findByUserIdAndDueDateBetweenAndStatusIn(user.getId(), today, today, OPEN);
         if (dueToday.isEmpty()) return 0;
@@ -134,13 +135,13 @@ public class PushService {
         String title = "You have " + count + (count == 1 ? " task" : " tasks") + " due today";
         String body = count == 1 ? dueToday.get(0).getTitle() : "Open Second Brain to tackle today's plan.";
         enqueue(user.getId(), PushType.TASK_DUE, title, body,
-                Map.of("route", "/(tabs)"), endOfToday());
+                Map.of("route", "/(tabs)"), clockService.endOfToday(user));
         return 1;
     }
 
     private int planStreakAtRisk(User user) {
         if (blocked(user.getId(), PushType.STREAK_AT_RISK)) return 0;
-        LocalDate today = LocalDate.now();
+        LocalDate today = clockService.today(user);
         List<Domain> domains = domainRepository.findByUserIdAndStatus(user.getId(), DomainStatus.ACTIVE);
         for (Domain d : domains) {
             boolean trainingDay = DateUtil.isScheduledDay(d.getWeeklySchedule(), today);
@@ -151,7 +152,7 @@ public class PushService {
             enqueue(user.getId(), PushType.STREAK_AT_RISK,
                     "Keep your " + name + " streak alive",
                     "Today is a training day — log a session before midnight.",
-                    Map.of("route", "/(tabs)", "domainId", d.getId().toString()), endOfToday());
+                    Map.of("route", "/(tabs)", "domainId", d.getId().toString()), clockService.endOfToday(user));
             return 1; // one streak nudge per user per run (dedup/cooldown handle the rest)
         }
         return 0;
@@ -305,10 +306,6 @@ public class PushService {
         } catch (Exception e) {
             return null;
         }
-    }
-
-    private LocalDateTime endOfToday() {
-        return LocalDate.now().atTime(LocalTime.MAX);
     }
 
     /** Android notification channel id per type (channels are created app-side). */

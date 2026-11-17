@@ -549,6 +549,10 @@ CREATE INDEX IF NOT EXISTS idx_tasks_curriculum_step ON tasks(curriculum_step_id
 -- Per-type notification preferences as JSON text (null -> all enabled by default).
 ALTER TABLE users ADD COLUMN IF NOT EXISTS push_prefs TEXT;
 
+-- User's IANA timezone (e.g. 'Asia/Kolkata'); null -> server falls back to the app-default zone.
+-- Sent by the app on login/refresh; drives all per-user "today/this week/what hour" logic.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(64);
+
 -- One row per device. enabled=false on logout or when Expo reports DeviceNotRegistered.
 CREATE TABLE IF NOT EXISTS push_token (
     id          UUID PRIMARY KEY,

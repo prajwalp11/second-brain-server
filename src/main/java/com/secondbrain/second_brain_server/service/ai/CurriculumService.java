@@ -45,6 +45,7 @@ public class CurriculumService {
     private final VideoResolver videoResolver;
     private final VideoCacheRepository videoCacheRepository;
     private final com.secondbrain.second_brain_server.repository.DomainRepository domainRepository;
+    private final com.secondbrain.second_brain_server.service.ClockService clockService;
     private final PromptBuilder promptBuilder;
     private final GeminiClient geminiClient;
     private final ObjectMapper objectMapper;
@@ -296,7 +297,7 @@ public class CurriculumService {
 
     /** Next training day on/after today from the domain schedule; falls back to today if none set. */
     private LocalDate nextDueDate(Domain domain) {
-        return DateUtil.nextScheduledOnOrAfter(domain.getWeeklySchedule(), LocalDate.now());
+        return DateUtil.nextScheduledOnOrAfter(domain.getWeeklySchedule(), clockService.today(domain.getUser()));
     }
 
     private List<GeneratedCurriculumStep> generateNextBlock(Domain domain, List<CurriculumStep> done) {

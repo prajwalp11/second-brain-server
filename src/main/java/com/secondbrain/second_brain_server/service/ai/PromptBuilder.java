@@ -32,8 +32,16 @@ public class PromptBuilder {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final DecimalFormat DECIMAL_FORMAT = new DecimalFormat("#.##");
 
+    private final com.secondbrain.second_brain_server.service.ClockService clockService;
+
+    /** "Today" in the domain owner's timezone (falls back to app-default when user/zone unknown). */
+    private LocalDate todayFor(Domain domain) {
+        return clockService.today(domain != null ? domain.getUser() : null);
+    }
+
     public String systemGenerator(DomainType type, SkillLevel level, String url, String customName, String context, List<String> existingSchedules, String userSchedule) {
-        LocalDate today = LocalDate.now();
+        // Domain doesn't exist yet at creation — use the app-default zone for the seed date.
+        LocalDate today = clockService.today((com.secondbrain.second_brain_server.entities.User) null);
         String dayOfWeek = today.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
 
         StringBuilder prompt = new StringBuilder();
@@ -235,16 +243,18 @@ public class PromptBuilder {
         }
 
         prompt.append("═══ END OF DATA ═══\n");
-        prompt.append("Today's date: ").append(LocalDate.now().format(DATE_FORMATTER)).append("\n");
+        // Chat guidance date: app-default zone (UserContext carries no User to resolve a per-user zone).
+        String chatToday = clockService.today((com.secondbrain.second_brain_server.entities.User) null).format(DATE_FORMATTER);
+        prompt.append("Today's date: ").append(chatToday).append("\n");
         prompt.append("User's name: ").append(context.getUserName()).append("\n");
-        prompt.append("IMPORTANT: When the user says 'starting today' or 'from today', set at least one task's dueDate to TODAY's date (").append(LocalDate.now().format(DATE_FORMATTER)).append("). Do NOT push all tasks to future days if the user explicitly wants to start now.\n");
+        prompt.append("IMPORTANT: When the user says 'starting today' or 'from today', set at least one task's dueDate to TODAY's date (").append(chatToday).append("). Do NOT push all tasks to future days if the user explicitly wants to start now.\n");
         prompt.append("Respond naturally but ONLY about the data above. User's message will follow.\n");
 
         return prompt.toString();
     }
 
     public String taskGeneration(UserContext context, Domain domain) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = todayFor(domain);
         String dayOfWeek = today.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
 
         StringBuilder prompt = new StringBuilder();
@@ -332,7 +342,7 @@ public class PromptBuilder {
      * calibrates the difficulty/wording to the user's level/pace. Returns ONE task as a JSON object.
      */
     public String curriculumTask(Domain domain, String phase, String stepTitle, String stepDescription) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = todayFor(domain);
         StringBuilder p = new StringBuilder();
         p.append("You are an AI coach for the 'Second Brain' app. Today is ")
          .append(today.format(DATE_FORMATTER)).append(".\n");
@@ -391,7 +401,7 @@ public class PromptBuilder {
         Milestone lastCompleted = (completedHistory != null && !completedHistory.isEmpty())
                 ? completedHistory.get(completedHistory.size() - 1)
                 : null;
-        LocalDate today = LocalDate.now();
+        LocalDate today = todayFor(domain);
         StringBuilder prompt = new StringBuilder();
         prompt.append("You are an expert coach for a personal growth app called 'Second Brain'.\n");
         prompt.append("Today is ").append(today.format(DATE_FORMATTER)).append(".\n");
